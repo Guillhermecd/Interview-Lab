@@ -26,6 +26,13 @@ interface Session {
 }
 
 class AppTimeoutError extends Error {}
+class AbortedError extends Error {}
+
+type Interruption = AppTimeoutError | AbortedError;
+
+function isInterruption(error: unknown): error is Interruption {
+  return error instanceof AppTimeoutError || error instanceof AbortedError;
+}
 
 function singleStatement(text: string): SingleStatementQuery {
   return { text, rowMode: 'array', queryMode: 'extended' };
@@ -43,13 +50,21 @@ export class QueryExecutor {
     @Inject(QUERY_ENV) private readonly limits: QueryEnv,
   ) {}
 
-  async execute(sql: string): Promise<QueryResult> {
+  // `signal` lets the caller give up (for example when the HTTP client
+  // disconnects): the running statement is cancelled in the database.
+  async execute(sql: string, signal?: AbortSignal): Promise<QueryResult> {
+    if (signal?.aborted === true) {
+      throw new QueryExecutionError('QUERY_CANCELLED');
+    }
     const startedAt = performance.now();
     const client = await this.connect();
     const session: Partial<Session> = {};
 
     try {
-      const fetched = await this.withAppTimeout(this.runInTransaction(client, sql, session));
+      const fetched = await this.withInterruption(
+        this.runInTransaction(client, sql, session),
+        signal,
+      );
       client.release();
       return this.toResult(fetched, startedAt);
     } catch (error) {
@@ -99,22 +114,32 @@ export class QueryExecutor {
     };
   }
 
-  private async withAppTimeout<T>(work: Promise<T>): Promise<T> {
+  // Resolves with the work, or rejects as soon as the application timeout
+  // fires or the caller aborts.
+  private async withInterruption<T>(work: Promise<T>, signal?: AbortSignal): Promise<T> {
     let timer: NodeJS.Timeout | undefined;
-    const timeout = new Promise<never>((_resolve, reject) => {
+    let onAbort: (() => void) | undefined;
+    const interruption = new Promise<never>((_resolve, reject) => {
       timer = setTimeout(() => {
         reject(new AppTimeoutError());
       }, this.limits.appTimeoutMs);
+      onAbort = () => {
+        reject(new AbortedError());
+      };
+      signal?.addEventListener('abort', onAbort, { once: true });
     });
 
-    // If the timer wins, `work` still rejects later, when its connection is
-    // destroyed. That outcome was already reported through the race.
+    // If the interruption wins, `work` still rejects later, when its connection
+    // is destroyed. That outcome was already reported through the race.
     work.catch(() => undefined);
 
     try {
-      return await Promise.race([work, timeout]);
+      return await Promise.race([work, interruption]);
     } finally {
       clearTimeout(timer);
+      if (onAbort) {
+        signal?.removeEventListener('abort', onAbort);
+      }
     }
   }
 
@@ -134,7 +159,7 @@ export class QueryExecutor {
   // After a failure the connection only goes back to the pool if the
   // transaction could be rolled back; otherwise it is destroyed.
   private async discard(client: PoolClient, error: unknown, backendPid?: number): Promise<void> {
-    if (error instanceof AppTimeoutError) {
+    if (isInterruption(error)) {
       this.cancelBackend(backendPid);
       client.release(true);
       return;
@@ -156,13 +181,16 @@ export class QueryExecutor {
       return;
     }
     this.pool.query('SELECT pg_cancel_backend($1)', [backendPid]).catch((error: unknown) => {
-      this.logger.warn(`Could not cancel a timed out query (${describeErrorForLog(error)})`);
+      this.logger.warn(`Could not cancel an interrupted query (${describeErrorForLog(error)})`);
     });
   }
 
   private translate(error: unknown): QueryExecutionError {
     if (error instanceof AppTimeoutError) {
       return new QueryExecutionError('QUERY_TIMEOUT');
+    }
+    if (error instanceof AbortedError) {
+      return new QueryExecutionError('QUERY_CANCELLED');
     }
     const translated = translateDatabaseError(error);
     if (translated.code === 'QUERY_FAILED' || translated.code === 'DATABASE_UNAVAILABLE') {

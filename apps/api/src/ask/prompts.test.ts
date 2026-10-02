@@ -1,7 +1,7 @@
 import type { QueryResult } from '@interview-lab/shared';
 import { describe, expect, it } from 'vitest';
 import type { SchemaDescription } from '../query/schema-catalog.service.js';
-import { buildExplanationRequest, buildSqlRequest } from './prompts.js';
+import { buildExplanationRequest, buildSqlRequest, buildSummaryRequest } from './prompts.js';
 
 const SCHEMA: SchemaDescription = {
   tables: [
@@ -93,10 +93,43 @@ describe('buildSqlRequest', () => {
     );
   });
 
+  it('has no conversation block when there is no history', () => {
+    const { prompt } = buildSqlRequest({
+      question: 'x',
+      schema: SCHEMA,
+      maxRows: 1000,
+      context: { recent: [] },
+    });
+
+    expect(prompt).not.toContain('<conversation>');
+  });
+
+  it('puts the history before the question and cuts long messages', () => {
+    const { prompt } = buildSqlRequest({
+      question: 'E por produto?',
+      schema: SCHEMA,
+      maxRows: 1000,
+      context: {
+        summary: 'Resumo anterior.',
+        recent: [
+          { role: 'user', content: 'a'.repeat(2000) },
+          { role: 'assistant', content: 'Resposta.', sql: 'SELECT 1' },
+        ],
+      },
+    });
+
+    expect(prompt).toContain('summary of earlier messages: Resumo anterior.');
+    expect(prompt).toContain(`user: ${'a'.repeat(500)}…`);
+    expect(prompt).toContain('assistant: Resposta.\nsql: SELECT 1');
+    expect(prompt.indexOf('<conversation>')).toBeLessThan(prompt.indexOf('<question>'));
+  });
+
   it('asks for a JSON object with the SQL or a reason', () => {
     const { responseSchema } = buildSqlRequest({ question: 'x', schema: SCHEMA, maxRows: 1000 });
 
-    expect(responseSchema).toMatchObject({ required: ['sql', 'cannotAnswerReason'] });
+    expect(responseSchema).toMatchObject({
+      required: ['sql', 'cannotAnswerReason', 'visualization', 'xColumn', 'yColumn'],
+    });
   });
 });
 
@@ -156,5 +189,29 @@ describe('buildExplanationRequest', () => {
 
     expect(prompt).toContain(`<question>\n${question}\n</question>`);
     expect(prompt).toContain(`<sql>\n${sql}\n</sql>`);
+  });
+});
+
+describe('buildSummaryRequest', () => {
+  it('sends the previous summary and the messages to be summarized', () => {
+    const { prompt, responseSchema } = buildSummaryRequest({
+      previousSummary: 'O usuário analisa vendas.',
+      messages: [
+        { role: 'user', content: 'Faturamento por região?' },
+        { role: 'assistant', content: 'O Sul lidera.', sql: 'SELECT 1' },
+      ],
+    });
+
+    expect(prompt).toContain('<previous_summary>\nO usuário analisa vendas.\n</previous_summary>');
+    expect(prompt).toContain(
+      'user: Faturamento por região?\nassistant: O Sul lidera.\nsql: SELECT 1',
+    );
+    expect(responseSchema).toMatchObject({ required: ['summary'] });
+  });
+
+  it('works without a previous summary', () => {
+    const { prompt } = buildSummaryRequest({ messages: [{ role: 'user', content: 'Oi' }] });
+
+    expect(prompt).toContain('<previous_summary>\n\n</previous_summary>');
   });
 });

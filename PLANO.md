@@ -16,10 +16,10 @@ tabela/gráfico + explicação, em streaming.
 | 02 | Executor de queries seguro | — | CONCLUÍDA |
 | 03 | Guarda SQL (parser e validação) | D-04 | CONCLUÍDA |
 | 04 | Integração com LLM (texto → SQL → explicação) | D-03 | CONCLUÍDA |
-| 05 | Streaming SSE, histórico e memória resumida | D-07 | PENDENTE |
+| 05 | Streaming SSE, histórico e memória resumida | D-07 | CONCLUÍDA |
 | 06 | Frontend: chat, tabela, gráfico, editor SQL | D-06 | PENDENTE |
 | 07 | Human-in-the-loop (revisar/editar SQL) | — | PENDENTE |
-| 08 | Autenticação, tokens por usuário, rate limit, cache | D-07, D-08 | PENDENTE |
+| 08 | Autenticação, tokens por usuário, rate limit, cache | D-07b, D-08 | PENDENTE |
 | 09 | Observabilidade, hardening, deploy e README | D-11 | PENDENTE |
 
 A ordem acima é uma proposta (ver D-10).
@@ -114,7 +114,7 @@ desconexão); teste da regra de resumo.
 - Autenticação (D-08) — pré-requisito para "tokens por usuário".
 - Contabilização de tokens por usuário e por conversa; consulta de consumo.
 - Rate limiting por usuário **antes** da chamada à LLM; cota diária de tokens.
-- Cache de perguntas repetidas (D-07), com chave considerando pergunta normalizada +
+- Cache de perguntas repetidas (D-07b), com chave considerando pergunta normalizada +
   versão do schema; TTL definido; o resultado da query também respeita TTL.
 **Verificação:** testes de rate limit (limite atingido → 429), de cota, de acerto/erro de cache
 e de invalidação quando o schema muda.

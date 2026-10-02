@@ -14,6 +14,13 @@ const ENV: AppEnv = {
     readonlyPassword: 'readonly-secret',
     poolMax: 1,
   },
+  appDatabase: {
+    host: 'localhost',
+    port: 5432,
+    name: 'interview_lab',
+    appPassword: 'app-secret',
+    poolMax: 1,
+  },
   query: {
     maxRows: 1000,
     statementTimeoutMs: 5000,

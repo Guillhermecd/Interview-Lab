@@ -26,11 +26,13 @@ describe('QueryExecutor', () => {
     return new QueryExecutor(pool, env.query);
   }
 
-  async function runningSleepQueries(): Promise<number> {
+  // The executor runs user SQL through a cursor, so pg_stat_activity shows the
+  // FETCH statement, not the original text.
+  async function runningUserQueries(): Promise<number> {
     const result = await withClient(database.admin, (client) =>
       client.query<{ total: string }>(
         `SELECT count(*) AS total FROM pg_stat_activity
-         WHERE usename = 'app_readonly' AND state = 'active' AND query LIKE '%pg_sleep%'`,
+         WHERE usename = 'app_readonly' AND state = 'active' AND query LIKE 'FETCH%'`,
       ),
     );
     return Number(result.rows[0]?.total);
@@ -169,12 +171,16 @@ describe('QueryExecutor', () => {
       });
       const startedAt = Date.now();
 
-      await expect(executor.execute('SELECT pg_sleep(30)')).rejects.toMatchObject({
-        code: 'QUERY_TIMEOUT',
-      });
+      const execution = executor.execute('SELECT pg_sleep(30)');
+      // Attached now so the rejection is never unhandled while the test polls.
+      const outcome = expect(execution).rejects.toMatchObject({ code: 'QUERY_TIMEOUT' });
+      // The query really is running in the database before the timeout fires...
+      await expect.poll(runningUserQueries, { timeout: 5000, interval: 20 }).toBe(1);
+      await outcome;
 
       expect(Date.now() - startedAt).toBeLessThan(SHORT_TIMEOUT_MS + TIMEOUT_TOLERANCE_MS);
-      await expect.poll(runningSleepQueries, { timeout: 5000 }).toBe(0);
+      // ...and is cancelled there, not just abandoned by the application.
+      await expect.poll(runningUserQueries, { timeout: 5000 }).toBe(0);
     });
 
     it('keeps working after a timeout', async () => {
@@ -201,6 +207,53 @@ describe('QueryExecutor', () => {
       await expect(executor.execute('SELECT pg_sleep(30)')).rejects.toMatchObject({
         code: 'QUERY_TIMEOUT',
       });
+    });
+  });
+
+  describe('cancellation', () => {
+    it('cancels a running query when the caller aborts', async () => {
+      const executor = executorWith({
+        statementTimeoutMs: LONG_TIMEOUT_MS,
+        appTimeoutMs: LONG_TIMEOUT_MS + 1000,
+      });
+      const abort = new AbortController();
+      const startedAt = Date.now();
+
+      const execution = executor.execute('SELECT pg_sleep(30)', abort.signal);
+      const outcome = expect(execution).rejects.toMatchObject({ code: 'QUERY_CANCELLED' });
+      await expect.poll(runningUserQueries, { timeout: 5000, interval: 20 }).toBe(1);
+
+      abort.abort();
+
+      await outcome;
+      expect(Date.now() - startedAt).toBeLessThan(LONG_TIMEOUT_MS);
+      await expect.poll(runningUserQueries, { timeout: 5000 }).toBe(0);
+    });
+
+    it('does not start a query for a caller that already gave up', async () => {
+      const abort = new AbortController();
+      abort.abort();
+
+      await expect(executorWith().execute('SELECT 1', abort.signal)).rejects.toMatchObject({
+        code: 'QUERY_CANCELLED',
+      });
+    });
+
+    it('keeps working after a cancellation', async () => {
+      const executor = executorWith({
+        statementTimeoutMs: LONG_TIMEOUT_MS,
+        appTimeoutMs: LONG_TIMEOUT_MS + 1000,
+      });
+      const abort = new AbortController();
+      const execution = executor.execute('SELECT pg_sleep(30)', abort.signal);
+      setTimeout(() => {
+        abort.abort();
+      }, SHORT_TIMEOUT_MS);
+      await expect(execution).rejects.toMatchObject({ code: 'QUERY_CANCELLED' });
+
+      const result = await executor.execute('SELECT 1 AS one');
+
+      expect(result.rows).toEqual([[1]]);
     });
   });
 

@@ -31,7 +31,8 @@ export class AskModule {
         { provide: ASK_LIMITS, useValue: limits },
         AskService,
       ],
-      exports: [AskService],
+      // LLM_PROVIDER is exported for the conversation summary (D-27).
+      exports: [AskService, LLM_PROVIDER],
     };
   }
 }

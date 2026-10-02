@@ -69,6 +69,13 @@ export async function startTestDatabase(): Promise<TestDatabase> {
         readonlyPassword: READONLY_TEST_PASSWORD,
         poolMax: TEST_POOL_MAX,
       },
+      appDatabase: {
+        host: container.getHost(),
+        port: container.getPort(),
+        name: container.getDatabase(),
+        appPassword: APP_TEST_PASSWORD,
+        poolMax: TEST_POOL_MAX,
+      },
       query: { ...DEFAULT_TEST_QUERY_ENV, ...query },
       llm: {
         geminiApiKey: undefined,

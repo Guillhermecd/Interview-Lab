@@ -1,7 +1,7 @@
 import type { QueryColumn } from '@interview-lab/shared';
 import { describe, expect, it } from 'vitest';
 import { LlmError } from '../llm/llm-error.js';
-import { parseExplanation, parseSqlGeneration } from './llm-output.js';
+import { parseSqlGeneration, parseSummary, resolveVisualization } from './llm-output.js';
 
 const COLUMNS: QueryColumn[] = [
   { name: 'regiao', type: 'text' },
@@ -14,10 +14,27 @@ function expectInvalid(action: () => unknown): void {
 }
 
 describe('parseSqlGeneration', () => {
-  it('reads the SQL', () => {
-    expect(parseSqlGeneration({ sql: ' SELECT 1 ', cannotAnswerReason: '' })).toEqual({
+  it('reads the SQL and the proposed visualization', () => {
+    expect(
+      parseSqlGeneration({
+        sql: ' SELECT 1 ',
+        cannotAnswerReason: '',
+        visualization: 'bar',
+        xColumn: 'regiao',
+        yColumn: 'faturamento',
+      }),
+    ).toEqual({
       kind: 'sql',
       sql: 'SELECT 1',
+      visualization: { type: 'bar', xColumn: 'regiao', yColumn: 'faturamento' },
+    });
+  });
+
+  it('reads the SQL even when the visualization fields are missing', () => {
+    expect(parseSqlGeneration({ sql: 'SELECT 1' })).toEqual({
+      kind: 'sql',
+      sql: 'SELECT 1',
+      visualization: { type: '', xColumn: '', yColumn: '' },
     });
   });
 
@@ -50,70 +67,54 @@ describe('parseSqlGeneration', () => {
   });
 });
 
-describe('parseExplanation', () => {
-  it('reads the explanation and a chart suggestion', () => {
+describe('resolveVisualization', () => {
+  it('accepts a chart whose columns exist in the result', () => {
     expect(
-      parseExplanation(
-        {
-          explanation: 'O Sudeste lidera.',
-          visualization: 'bar',
-          xColumn: 'regiao',
-          yColumn: 'faturamento',
-        },
-        COLUMNS,
-      ),
-    ).toEqual({
-      explanation: 'O Sudeste lidera.',
-      visualization: { type: 'bar', xColumn: 'regiao', yColumn: 'faturamento' },
-    });
+      resolveVisualization({ type: 'bar', xColumn: 'regiao', yColumn: 'faturamento' }, COLUMNS),
+    ).toEqual({ type: 'bar', xColumn: 'regiao', yColumn: 'faturamento' });
   });
 
   it('keeps a table suggestion without columns', () => {
     expect(
-      parseExplanation(
-        { explanation: 'Ok.', visualization: 'table', xColumn: 'regiao', yColumn: 'faturamento' },
-        COLUMNS,
-      ).visualization,
+      resolveVisualization({ type: 'table', xColumn: 'regiao', yColumn: 'faturamento' }, COLUMNS),
     ).toEqual({ type: 'table' });
   });
 
   it.each([
-    ['an unknown chart type', { visualization: 'pie', xColumn: 'regiao', yColumn: 'faturamento' }],
+    ['an unknown chart type', { type: 'pie', xColumn: 'regiao', yColumn: 'faturamento' }],
     [
       'a column that is not in the result',
-      { visualization: 'bar', xColumn: 'pais', yColumn: 'faturamento' },
+      { type: 'bar', xColumn: 'pais', yColumn: 'faturamento' },
     ],
-    ['a missing column', { visualization: 'line', xColumn: 'regiao', yColumn: '' }],
-    [
-      'the same column on both axes',
-      { visualization: 'bar', xColumn: 'regiao', yColumn: 'regiao' },
-    ],
-    ['a missing visualization', {}],
+    ['a missing column', { type: 'line', xColumn: 'regiao', yColumn: '' }],
+    ['the same column on both axes', { type: 'bar', xColumn: 'regiao', yColumn: 'regiao' }],
+    ['an empty suggestion', { type: '', xColumn: '', yColumn: '' }],
     [
       'a script instead of a chart type',
-      { visualization: '<script>alert(1)</script>', xColumn: 'regiao', yColumn: 'faturamento' },
+      { type: '<script>alert(1)</script>', xColumn: 'regiao', yColumn: 'faturamento' },
     ],
-  ])('falls back to a table for %s', (_case, fields) => {
-    expect(parseExplanation({ explanation: 'Ok.', ...fields }, COLUMNS).visualization).toEqual({
-      type: 'table',
-    });
+  ])('falls back to a table for %s', (_case, proposed) => {
+    expect(resolveVisualization(proposed, COLUMNS)).toEqual({ type: 'table' });
+  });
+});
+
+describe('parseSummary', () => {
+  it('reads the summary', () => {
+    expect(parseSummary({ summary: ' O usuário analisou vendas. ' })).toBe(
+      'O usuário analisou vendas.',
+    );
   });
 
-  it('cuts an overlong explanation', () => {
-    const parsed = parseExplanation(
-      { explanation: 'x'.repeat(10_000), visualization: 'table' },
-      COLUMNS,
-    );
-
-    expect(parsed.explanation).toHaveLength(2000);
+  it('cuts an overlong summary', () => {
+    expect(parseSummary({ summary: 'x'.repeat(10_000) })).toHaveLength(2000);
   });
 
   it.each([
-    ['an empty explanation', { explanation: '  ', visualization: 'table' }],
-    ['a missing explanation', { visualization: 'table' }],
-    ['a non-string explanation', { explanation: { text: 'x' }, visualization: 'table' }],
+    ['an empty summary', { summary: ' ' }],
+    ['a missing summary', {}],
+    ['a non-string summary', { summary: ['x'] }],
     ['null', null],
   ])('rejects %s', (_case, data) => {
-    expectInvalid(() => parseExplanation(data, COLUMNS));
+    expectInvalid(() => parseSummary(data));
   });
 });

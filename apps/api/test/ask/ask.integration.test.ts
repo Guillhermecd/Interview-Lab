@@ -8,11 +8,7 @@ import { QueryExecutor } from '../../src/query/query-executor.service.js';
 import { createReadonlyPool } from '../../src/query/readonly-pool.js';
 import { SchemaCatalog } from '../../src/query/schema-catalog.service.js';
 import { MAX_JOINS, SqlGuard } from '../../src/sql-guard/sql-guard.js';
-import {
-  explanationAnswer,
-  ScriptedLlmProvider,
-  sqlAnswer,
-} from '../support/scripted-llm-provider.js';
+import { ScriptedLlmProvider, sqlAnswer } from '../support/scripted-llm-provider.js';
 import {
   migrateTestDatabase,
   startTestDatabase,
@@ -96,14 +92,19 @@ describe('AskService against PostgreSQL', () => {
   });
 
   it('answers a question end to end', async () => {
-    const provider = new ScriptedLlmProvider([
-      sqlAnswer(
-        `SELECT r.name AS regiao, count(*) AS pedidos
-         FROM orders o JOIN customers c ON c.id = o.customer_id JOIN regions r ON r.id = c.region_id
-         GROUP BY r.name ORDER BY r.name`,
-      ),
-      explanationAnswer('Há pedidos nas cinco regiões.', 'bar', 'regiao', 'pedidos'),
-    ]);
+    const provider = new ScriptedLlmProvider(
+      [
+        sqlAnswer(
+          `SELECT r.name AS regiao, count(*) AS pedidos
+           FROM orders o JOIN customers c ON c.id = o.customer_id JOIN regions r ON r.id = c.region_id
+           GROUP BY r.name ORDER BY r.name`,
+          'bar',
+          'regiao',
+          'pedidos',
+        ),
+      ],
+      ['Há pedidos nas cinco regiões.'],
+    );
 
     const response = await serviceWith(provider).ask('Quantos pedidos por região?');
 
@@ -125,11 +126,13 @@ describe('AskService against PostgreSQL', () => {
   });
 
   it('recovers when the first SQL is refused by the guard', async () => {
-    const provider = new ScriptedLlmProvider([
-      sqlAnswer('SELECT rolname FROM pg_roles'),
-      sqlAnswer('SELECT count(*) AS regioes FROM regions'),
-      explanationAnswer('Existem 5 regiões.'),
-    ]);
+    const provider = new ScriptedLlmProvider(
+      [
+        sqlAnswer('SELECT rolname FROM pg_roles'),
+        sqlAnswer('SELECT count(*) AS regioes FROM regions'),
+      ],
+      ['Existem 5 regiões.'],
+    );
 
     const response = await serviceWith(provider).ask('Quantas regiões existem?');
 
@@ -139,11 +142,10 @@ describe('AskService against PostgreSQL', () => {
   });
 
   it('recovers when the first SQL fails in the database', async () => {
-    const provider = new ScriptedLlmProvider([
-      sqlAnswer('SELECT total FROM orders'),
-      sqlAnswer('SELECT count(*) AS total FROM orders'),
-      explanationAnswer('São 20.000 pedidos.'),
-    ]);
+    const provider = new ScriptedLlmProvider(
+      [sqlAnswer('SELECT total FROM orders'), sqlAnswer('SELECT count(*) AS total FROM orders')],
+      ['São 20.000 pedidos.'],
+    );
 
     const response = await serviceWith(provider).ask('Quantos pedidos?');
 
@@ -166,16 +168,16 @@ describe('AskService against PostgreSQL', () => {
   });
 
   it('sends the LLM at most the configured rows while the user receives all of them', async () => {
-    const provider = new ScriptedLlmProvider([
-      sqlAnswer('SELECT id FROM orders ORDER BY id'),
-      explanationAnswer('Lista parcial de pedidos.'),
-    ]);
+    const provider = new ScriptedLlmProvider(
+      [sqlAnswer('SELECT id FROM orders ORDER BY id')],
+      ['Lista parcial de pedidos.'],
+    );
 
     const response = await serviceWith(provider).ask('Liste os pedidos');
 
     expect(response).toMatchObject({ status: 'answered' });
     expect(response.status === 'answered' && response.result.rowCount).toBe(MAX_ROWS);
-    expect(provider.requests[1]?.prompt).toContain(`"rowsShown":${String(EXPLAIN_MAX_ROWS)}`);
-    expect(provider.requests[1]?.prompt).toContain('"moreRowsExistInDatabase":true');
+    expect(provider.textRequests[0]?.prompt).toContain(`"rowsShown":${String(EXPLAIN_MAX_ROWS)}`);
+    expect(provider.textRequests[0]?.prompt).toContain('"moreRowsExistInDatabase":true');
   });
 });

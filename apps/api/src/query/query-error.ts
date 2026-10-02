@@ -3,6 +3,7 @@ import { DatabaseError } from 'pg';
 
 export const QUERY_ERROR_CODES = [
   'QUERY_TIMEOUT',
+  'QUERY_CANCELLED',
   'QUERY_SYNTAX_ERROR',
   'QUERY_INVALID_REFERENCE',
   'QUERY_NOT_ALLOWED',
@@ -15,6 +16,7 @@ export type QueryErrorCode = (typeof QUERY_ERROR_CODES)[number];
 
 const MESSAGES: Record<QueryErrorCode, string> = {
   QUERY_TIMEOUT: 'A consulta excedeu o tempo limite de execução.',
+  QUERY_CANCELLED: 'A consulta foi cancelada.',
   QUERY_SYNTAX_ERROR: 'A consulta SQL tem um erro de sintaxe.',
   QUERY_INVALID_REFERENCE: 'A consulta referencia uma tabela, coluna ou função que não existe.',
   QUERY_NOT_ALLOWED: 'A consulta tenta uma operação que não é permitida.',

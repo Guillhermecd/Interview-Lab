@@ -71,7 +71,16 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Trade-off:** só Postgres = menos um serviço para operar; Redis é o padrão de mercado para rate limit
   e cache e conta pontos no portfólio, mas é mais um container e mais um ponto de falha.
 - **Recomendação:** Postgres + Redis.
-- **Status:** PENDENTE
+- **Status:** DECIDIDA
+- **Escolha:** histórico de conversas e mensagens no Postgres, schema `app`. O armazenamento de cache e rate limit foi separado na D-07b.
+- **Data:** 2026-10-02
+- **Motivo:** a Fase 05 só precisa do histórico, que fica no Postgres nas duas opções.
+
+### D-07b — Armazenamento de cache e rate limit
+- **Opções:** Postgres (schema da aplicação) | Redis
+- **Trade-off:** o mesmo da D-07 — só Postgres é um serviço a menos para operar; Redis é o padrão de mercado para cache e rate limit, mas é mais um container e mais um ponto de falha.
+- **Recomendação:** Redis.
+- **Status:** PENDENTE (decidir antes da Fase 08)
 
 ### D-08 — Autenticação
 - **Opções:** JWT próprio simples | provedor externo | sem auth (usuário fixo)
@@ -150,6 +159,7 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Escolha:** Node 24 no CI e em `engines`; pnpm instalado globalmente via `npm install -g pnpm` (`corepack enable` falhou com `EPERM` sem terminal elevado)
 - **Data:** 2026-10-02
 - **Motivo:** mesma versão na máquina local e no CI.
+- **Ponto de atenção (2026-10-02):** o Node 24.15 no Windows derruba o processo de teste de forma intermitente (`0xC0000409`); 24.21 e 22.23 não. Usar 24.21 ou mais recente localmente. O CI usa a 24 mais recente e não é afetado. Detalhes no relatório da Fase 05.
 
 ### D-18 — Versão do PostgreSQL
 - **Opções:** 17 | 16
@@ -221,3 +231,18 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Escolha:** até **50 linhas** (`LLM_EXPLAIN_MAX_ROWS`), com a LLM informada de quantas linhas existem e se houve corte; o usuário continua recebendo todas as linhas na tabela
 - **Data:** 2026-10-02
 - **Motivo:** custo de tokens previsível e menos dados do banco saindo para o provedor.
+
+### D-27 — Memória resumida das conversas
+- **Opções:** quantas mensagens recentes manter na íntegra e quando regenerar o resumo
+- **Status:** DECIDIDA
+- **Escolha:** manter as **6 mensagens mais recentes** na íntegra; quando houver 6 ou mais mensagens além dessas ainda fora do resumo, a LLM gera um novo resumo incorporando-as
+- **Data:** 2026-10-02
+- **Motivo:** contexto suficiente para perguntas de continuação ("e por produto?") sem crescer o prompt indefinidamente. Cada regeneração é uma chamada extra à LLM.
+- **Na prática:** a LLM recebe o resumo mais todas as mensagens ainda fora dele, ou seja, de 6 a 11 mensagens na íntegra. Cortar para exatamente 6 descartaria mensagens que ainda não entraram no resumo.
+
+### D-28 — Dono das conversas antes da autenticação
+- **Opções:** conversas sem dono, com os endpoints atrás da flag interna | antecipar a autenticação
+- **Status:** DECIDIDA
+- **Escolha:** conversas sem dono até a Fase 08; os endpoints de conversa só existem com `INTERNAL_QUERY_ENDPOINT_ENABLED=true` (a mesma flag da D-22)
+- **Data:** 2026-10-02
+- **Motivo:** manter a ordem das fases (D-10). Na Fase 08 as conversas passam a ter dono e os endpoints saem de trás da flag.

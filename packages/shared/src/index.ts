@@ -80,3 +80,68 @@ export interface UnansweredQuestion {
 }
 
 export type AskResponse = AnsweredQuestion | UnansweredQuestion;
+
+export interface Conversation {
+  id: string;
+  // First question of the conversation; null until one is asked.
+  title: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type MessageRole = 'user' | 'assistant';
+export type AssistantMessageStatus = 'answered' | 'not_answerable' | 'error';
+
+export interface ConversationMessage {
+  id: string;
+  role: MessageRole;
+  content: string;
+  // The fields below are present only on assistant messages.
+  status?: AssistantMessageStatus;
+  sql?: string;
+  visualization?: VisualizationSuggestion;
+  rowCount?: number;
+  createdAt: string;
+}
+
+export interface ConversationList {
+  items: Conversation[];
+}
+
+export interface MessageList {
+  items: ConversationMessage[];
+}
+
+// Events of the answer stream (Server-Sent Events), in the order they occur:
+// sql (once per attempt) → rows → token (many) → done. An `error` event ends
+// the stream at any point.
+export interface SqlStreamEvent {
+  sql: string;
+  attempt: number;
+}
+
+export interface RowsStreamEvent {
+  result: QueryResult;
+  visualization: VisualizationSuggestion;
+}
+
+export interface TokenStreamEvent {
+  text: string;
+}
+
+export interface DoneStreamEvent {
+  messageId: string;
+  status: Exclude<AssistantMessageStatus, 'error'>;
+  attempts: number;
+  usage: TokenUsage;
+}
+
+export interface AnswerStreamEvents {
+  sql: SqlStreamEvent;
+  rows: RowsStreamEvent;
+  token: TokenStreamEvent;
+  done: DoneStreamEvent;
+  error: ApiErrorBody;
+}
+
+export type AnswerStreamEventName = keyof AnswerStreamEvents;
