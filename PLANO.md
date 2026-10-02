@@ -15,7 +15,7 @@ tabela/gráfico + explicação, em streaming.
 | 01 | Banco de demonstração e usuário read-only | D-05 | CONCLUÍDA |
 | 02 | Executor de queries seguro | — | CONCLUÍDA |
 | 03 | Guarda SQL (parser e validação) | D-04 | CONCLUÍDA |
-| 04 | Integração com LLM (texto → SQL → explicação) | D-03 | PENDENTE |
+| 04 | Integração com LLM (texto → SQL → explicação) | D-03 | CONCLUÍDA |
 | 05 | Streaming SSE, histórico e memória resumida | D-07 | PENDENTE |
 | 06 | Frontend: chat, tabela, gráfico, editor SQL | D-06 | PENDENTE |
 | 07 | Human-in-the-loop (revisar/editar SQL) | — | PENDENTE |

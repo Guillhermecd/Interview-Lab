@@ -34,9 +34,10 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
   de verdade dobra testes de integração.
 - **Recomendação:** interface própria + um provedor implementado.
 - **Status:** DECIDIDA
-- **Escolha:** interface própria (`LlmProvider`) + um provedor implementado: **Google Gemini**, pela camada gratuita. Modelo padrão `gemini-3.8-flash` (faixa "equilibrada"), configurável por `LLM_MODEL`.
+- **Escolha:** interface própria (`LlmProvider`) + um provedor implementado: **Google Gemini**, pela camada gratuita. Modelo padrão `gemini-3.5-flash-lite`, configurável por `LLM_MODEL`.
 - **Data:** 2026-10-02
 - **Motivo:** Anthropic e OpenAI não têm uso gratuito de API; o Gemini tem camada gratuita para os modelos Flash. A interface permite trocar de provedor depois escrevendo uma única classe.
+- **Modelo:** a primeira escolha foi `gemini-3.8-flash` (faixa "equilibrada"), mas a camada gratuita dele permite só 20 requisições por dia, e cada pergunta usa 2 a 3. Trocado para `gemini-3.5-flash-lite`, que passou na avaliação manual da Fase 04.
 - **Ponto de atenção:** na camada gratuita o Google usa os dados enviados para melhorar seus produtos. Hoje são perguntas, o schema e linhas dos dados de demonstração. Rever antes de usar dados reais ou publicar (Fase 09).
 
 ### D-04 — Parser SQL

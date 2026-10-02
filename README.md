@@ -79,7 +79,7 @@ necessárias.
 | 01 | Banco de demonstração e usuário read-only | Concluída |
 | 02 | Executor de queries seguro | Concluída |
 | 03 | Guarda SQL (parser e validação) | Concluída |
-| 04 | Integração com LLM (texto → SQL → explicação) | Pendente |
+| 04 | Integração com LLM (texto → SQL → explicação) | Concluída |
 | 05 | Streaming SSE, histórico e memória resumida | Pendente |
 | 06 | Frontend: chat, tabela, gráfico, editor SQL | Pendente |
 | 07 | Human-in-the-loop (revisar/editar SQL) | Pendente |
