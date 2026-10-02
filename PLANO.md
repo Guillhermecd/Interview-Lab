@@ -11,7 +11,7 @@ tabela/gráfico + explicação, em streaming.
 
 | Fase | Nome | Depende de decisões | Status |
 |---|---|---|---|
-| 00 | Fundação do repositório e CI | D-01, D-02, D-09, D-12 | PENDENTE |
+| 00 | Fundação do repositório e CI | D-01, D-02, D-09, D-12 | CONCLUÍDA |
 | 01 | Banco de demonstração e usuário read-only | D-05 | PENDENTE |
 | 02 | Executor de queries seguro | — | PENDENTE |
 | 03 | Guarda SQL (parser e validação) | D-04 | PENDENTE |

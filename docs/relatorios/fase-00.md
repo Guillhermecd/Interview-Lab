@@ -14,7 +14,8 @@
   - Web: renderização do componente `App`.
 - **`docker-compose.yml`** com PostgreSQL 17 e `.env.example`.
 - **CI** (`.github/workflows/ci.yml`): lint → typecheck → testes unitários → testes de integração → build, em PRs e em push na `main`.
-- **Documentação:** comandos de verificação em `template/RECOMENDACOES.md`; seção "Como rodar" no `README.md`; decisões D-04, D-10, D-16, D-17, D-18 em `DECISOES.md`.
+- **Documentação:** seção "Como rodar" no `README.md`; decisões D-04, D-10, D-16, D-17, D-18 em `DECISOES.md`; Fase 00 marcada `CONCLUÍDA` no `PLANO.md` (passa a valer com o merge).
+- **Alteração na pasta protegida `template/`:** comandos de verificação registrados em `template/RECOMENDACOES.md`, porque o próprio arquivo determina que sejam registrados ali na Fase 00. Reverto se você preferir outro lugar.
 - `.github/pull_request_template.md` já existia desde o commit inicial.
 
 ## 2. Por que foi feito assim
@@ -31,7 +32,7 @@ Detalhes escolhidos sem pergunta:
 - **`packages/shared` é compilado para `dist/`**; os scripts `lint`, `typecheck` e `test` da raiz o compilam antes de rodar, pois API e lint dependem dos tipos gerados.
 - **Vitest sem plugin SWC.** Os decorators do NestJS funcionaram com o transformador padrão do Vitest 5. Nenhum provider com injeção por tipo existe ainda (ver §6).
 - **Scripts de build de `cpu-features`, `protobufjs` e `ssh2` bloqueados** em `pnpm-workspace.yaml`: dependências nativas opcionais do Testcontainers, não usadas.
-- **Ações do CI** em `@v4` (`checkout`, `setup-node`, `pnpm/action-setup`); versão do pnpm vem do campo `packageManager`.
+- **Ações do CI** nas versões principais atuais (`checkout@v7`, `setup-node@v7`, `pnpm/action-setup@v6`); versão do pnpm vem do campo `packageManager`.
 
 ## 3. Verificação
 Executado com `pnpm verify` em Windows 11, Node 24.15, pnpm 12.8.1, Docker 29.1.2.
@@ -48,6 +49,7 @@ Verificações adicionais:
 - **Teste quebrado de propósito (local):** asserção do health check alterada para `'broken'` → `pnpm test` falhou com `1 failed | 9 passed`; restaurada → verde.
 - **API compilada em execução:** `node apps/api/dist/main.js` respondeu `200 {"status":"ok"}` em `/api/health`; com `PORT=abc` recusou iniciar com `InvalidEnvError`.
 - **`docker compose config`:** válido.
+- **Clone limpo (simulação do CI):** `git clone` da branch, `pnpm install --frozen-lockfile` e `pnpm verify` passaram por completo.
 
 **Não verificado:** o workflow do GitHub Actions ainda não rodou — exige push e PR. O critério do `PLANO.md` ("CI roda e falha de propósito com um teste quebrado; passa ao corrigir") só foi demonstrado localmente.
 
@@ -62,7 +64,7 @@ Verificações adicionais:
 2. **Demonstração de falha no CI.** Opções: (a) commit com teste quebrado seguido de commit de correção no mesmo PR — deixa a prova no histórico do PR, e o squash merge limpa a `main`; (b) aceitar a demonstração local. Recomendo (a).
 3. **Branch protection na `main`** exigindo o check `Lint, typecheck, test and build` — ação manual sua, depois da primeira execução do CI.
 4. **D-05 (dataset de demonstração)** — necessária para a Fase 01. Recomendação do `DECISOES.md`: schema próprio de vendas com seed gerado.
-5. **Ferramenta de migrations** — a Fase 01 exige e não há decisão registrada. Opções a detalhar: SQL puro versionado com um runner simples (ex.: `node-pg-migrate`), ou a ferramenta de um ORM/query builder (Drizzle, Prisma, Kysely). Depende também do driver/ORM, que a Fase 02 usará.
+5. **Driver de banco e ferramenta de migrations** — a Fase 01 exige os dois e não há decisão registrada. O driver já é necessário na Fase 01: os testes precisam conectar como `app_readonly` para provar que `INSERT`/`DROP` falham e que `pg_sleep` é cancelado. Opções a detalhar: driver `pg` + SQL puro versionado com runner simples (ex.: `node-pg-migrate`), ou ORM/query builder com migrations próprias (Drizzle, Prisma, Kysely).
 
 ## 6. Dívida técnica / pontos de atenção
 - **TypeScript 6.0 em vez de 7.0.** Atualizar quando o typescript-eslint suportar. Risco baixo.

@@ -52,7 +52,7 @@ estão em aberto — ver [DECISOES.md](DECISOES.md).
 
 | Fase | Nome | Status |
 |---|---|---|
-| 00 | Fundação do repositório e CI | Pendente |
+| 00 | Fundação do repositório e CI | Concluída |
 | 01 | Banco de demonstração e usuário read-only | Pendente |
 | 02 | Executor de queries seguro | Pendente |
 | 03 | Guarda SQL (parser e validação) | Pendente |
