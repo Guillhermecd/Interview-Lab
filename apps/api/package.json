@@ -9,7 +9,12 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --project unit",
-    "test:integration": "vitest run --project integration"
+    "test:integration": "vitest run --project integration",
+    "db:migrate": "pnpm build && node --env-file-if-exists=../../.env dist/database/cli.js migrate",
+    "db:migrate:down": "pnpm build && node --env-file-if-exists=../../.env dist/database/cli.js migrate:down",
+    "db:provision": "pnpm build && node --env-file-if-exists=../../.env dist/database/cli.js provision",
+    "db:seed": "pnpm build && node --env-file-if-exists=../../.env dist/database/cli.js seed",
+    "db:setup": "pnpm build && node --env-file-if-exists=../../.env dist/database/cli.js setup"
   },
   "dependencies": {
     "@interview-lab/shared": "workspace:*",
@@ -17,6 +22,8 @@
     "@nestjs/core": "^12.1.2",
     "@nestjs/platform-fastify": "^12.1.2",
     "libpg-query": "^18.1.5",
+    "node-pg-migrate": "^9.0.0",
+    "pg": "^8.23.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"
   },
@@ -24,6 +31,7 @@
     "@nestjs/testing": "^12.1.2",
     "@testcontainers/postgresql": "^12.2.0",
     "@types/node": "^24.19.0",
+    "@types/pg": "^8.23.1",
     "testcontainers": "^12.2.0",
     "vitest": "^5.0.3"
   }

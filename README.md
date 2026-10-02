@@ -4,10 +4,10 @@ Chat em linguagem natural sobre um banco PostgreSQL. A IA gera o SQL, o usuário
 revisar e editar, o backend valida e executa com segurança, e a resposta volta como
 tabela ou gráfico acompanhada de uma explicação, em streaming.
 
-> **Status:** projeto em construção. Existe apenas a fundação do repositório (Fase 00):
-> monorepo, lint, testes e CI. O fluxo de chat e as camadas de segurança descritos abaixo
-> estão **planejados**, ainda não implementados. Este README será expandido na Fase 09
-> com arquitetura detalhada e GIF de demonstração.
+> **Status:** projeto em construção. Existem a fundação do repositório (Fase 00) e o banco
+> de demonstração com a role read-only (Fase 01). O fluxo de chat, a guarda SQL e os
+> limites de execução descritos abaixo estão **planejados**, ainda não implementados.
+> Este README será expandido na Fase 09 com arquitetura detalhada e GIF de demonstração.
 
 ## Como vai funcionar
 
@@ -44,16 +44,34 @@ Regras complementares:
 | Banco | PostgreSQL | `PLANO.md` |
 | Repositório | Monorepo com pnpm workspaces (`apps/api`, `apps/web`, `packages/shared`) | D-02 |
 | Testes | Vitest, Testcontainers, Playwright | D-09 |
+| Parser SQL | `libpg-query` (parser do próprio Postgres) | D-04 |
+| Acesso ao banco | Driver `pg`, migrations em SQL puro com `node-pg-migrate` | D-19 |
 
-Provedor de LLM, parser SQL, biblioteca de gráficos, cache, autenticação e deploy ainda
-estão em aberto — ver [DECISOES.md](DECISOES.md).
+Provedor de LLM, biblioteca de gráficos, cache, autenticação e deploy ainda estão em
+aberto — ver [DECISOES.md](DECISOES.md).
+
+## Banco de dados
+
+| Schema | Conteúdo | Quem acessa |
+|---|---|---|
+| `sales` | Dados de demonstração: `regions`, `products`, `customers`, `orders`, `order_items` | `app_readonly` (somente `SELECT`) |
+| `app` | Dados da aplicação (usuários, histórico, tokens — tabelas chegam nas próximas fases) | `app_rw` |
+| `migrations` | Histórico de migrations | Apenas o administrador |
+
+A role `app_readonly` é a que executará o SQL gerado pela IA. Ela só tem `SELECT` nas
+tabelas de `sales`, concedido tabela por tabela, e não enxerga os dados de `app`. Os
+privilégios herdados de `PUBLIC` (criar tabelas temporárias, usar o schema `public`)
+foram revogados. `default_transaction_read_only = on` e `statement_timeout = 5s` são
+padrões da role — uma sessão consegue sobrescrevê-los, por isso a fronteira real são os
+privilégios, e as próximas camadas (guarda SQL e timeout na aplicação) continuam
+necessárias.
 
 ## Roadmap
 
 | Fase | Nome | Status |
 |---|---|---|
 | 00 | Fundação do repositório e CI | Concluída |
-| 01 | Banco de demonstração e usuário read-only | Pendente |
+| 01 | Banco de demonstração e usuário read-only | Concluída |
 | 02 | Executor de queries seguro | Pendente |
 | 03 | Guarda SQL (parser e validação) | Pendente |
 | 04 | Integração com LLM (texto → SQL → explicação) | Pendente |
@@ -93,6 +111,9 @@ cp .env.example .env
 # PostgreSQL 17 local
 docker compose up -d postgres
 
+# Migrations + senhas das roles + dados de demonstração
+pnpm --filter @interview-lab/api db:setup
+
 # API em http://localhost:3000/api/health
 pnpm --filter @interview-lab/api dev
 
@@ -101,6 +122,18 @@ pnpm --filter @interview-lab/web dev
 ```
 
 Por enquanto a API expõe apenas o health check e o web apenas uma página estática.
+
+Comandos de banco (`pnpm --filter @interview-lab/api <comando>`):
+
+| Comando | O que faz |
+|---|---|
+| `db:setup` | `db:migrate` + `db:provision` + `db:seed` |
+| `db:migrate` | Aplica as migrations pendentes |
+| `db:migrate:down` | Desfaz todas as migrations |
+| `db:provision` | Define as senhas de `app_readonly` e `app_rw` a partir do `.env` |
+| `db:seed` | Recarrega os dados de demonstração (apaga e insere de novo) |
+
+Se a porta 5432 já estiver em uso na máquina, mude `DB_PORT` no `.env`.
 
 ### Verificação
 
