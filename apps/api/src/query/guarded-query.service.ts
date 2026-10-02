@@ -17,9 +17,9 @@ export class GuardedQueryService {
   ) {}
 
   // async, so a guard rejection is a rejected promise like any execution error.
-  async run(sql: string): Promise<QueryResult> {
+  async run(sql: string, signal?: AbortSignal): Promise<QueryResult> {
     // What runs is the text returned by the guard, never the original input.
-    return this.executor.execute(this.validate(sql));
+    return this.executor.execute(this.validate(sql), signal);
   }
 
   private validate(sql: string): string {
