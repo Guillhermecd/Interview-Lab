@@ -13,7 +13,7 @@ tabela/gráfico + explicação, em streaming.
 |---|---|---|---|
 | 00 | Fundação do repositório e CI | D-01, D-02, D-09, D-12 | CONCLUÍDA |
 | 01 | Banco de demonstração e usuário read-only | D-05 | CONCLUÍDA |
-| 02 | Executor de queries seguro | — | PENDENTE |
+| 02 | Executor de queries seguro | — | CONCLUÍDA |
 | 03 | Guarda SQL (parser e validação) | D-04 | PENDENTE |
 | 04 | Integração com LLM (texto → SQL → explicação) | D-03 | PENDENTE |
 | 05 | Streaming SSE, histórico e memória resumida | D-07 | PENDENTE |
