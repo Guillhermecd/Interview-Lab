@@ -7,9 +7,9 @@ tabela ou gráfico acompanhada de uma explicação, em streaming.
 > **Status:** projeto em construção. Existem a fundação do repositório (Fase 00), o banco
 > de demonstração com a role read-only (Fase 01), o executor de queries com timeout e
 > limite de linhas (Fase 02) e a guarda SQL (Fase 03) — ou seja, as três camadas de
-> segurança — e o fluxo pergunta → SQL → execução → explicação com a LLM (Fase 04), ainda
-> sem endpoint HTTP. O streaming e a interface de chat descritos abaixo estão
-> **planejados**, ainda não implementados. Este README será expandido na Fase 09 com
+> segurança —, o fluxo pergunta → SQL → execução → explicação com a LLM (Fase 04) e as
+> conversas com resposta em streaming, histórico e memória resumida (Fase 05). A
+> interface de chat descrita abaixo está **planejada**, ainda não implementada. Este README será expandido na Fase 09 com
 > arquitetura detalhada e GIF de demonstração.
 
 ## Como vai funcionar
@@ -60,7 +60,7 @@ Biblioteca de gráficos, cache, autenticação e deploy ainda estão em aberto �
 | Schema | Conteúdo | Quem acessa |
 |---|---|---|
 | `sales` | Dados de demonstração: `regions`, `products`, `customers`, `orders`, `order_items` | `app_readonly` (somente `SELECT`) |
-| `app` | Dados da aplicação (usuários, histórico, tokens — tabelas chegam nas próximas fases) | `app_rw` |
+| `app` | Dados da aplicação: `conversations` e `messages` (usuários e tokens chegam na Fase 08) | `app_rw` |
 | `migrations` | Histórico de migrations | Apenas o administrador |
 
 A role `app_readonly` é a que executará o SQL gerado pela IA. Ela só tem `SELECT` nas
@@ -80,7 +80,7 @@ necessárias.
 | 02 | Executor de queries seguro | Concluída |
 | 03 | Guarda SQL (parser e validação) | Concluída |
 | 04 | Integração com LLM (texto → SQL → explicação) | Concluída |
-| 05 | Streaming SSE, histórico e memória resumida | Pendente |
+| 05 | Streaming SSE, histórico e memória resumida | Concluída |
 | 06 | Frontend: chat, tabela, gráfico, editor SQL | Pendente |
 | 07 | Human-in-the-loop (revisar/editar SQL) | Pendente |
 | 08 | Autenticação, tokens por usuário, rate limit, cache | Pendente |
@@ -132,6 +132,10 @@ Por enquanto o web é apenas uma página estática. A API expõe:
 |---|---|
 | `GET /api/health` | `200 {"status":"ok"}` quando a aplicação e o banco respondem; `503` caso contrário |
 | `POST /api/internal/queries/execute` | Executa `{"sql": "..."}` como `app_readonly`. **Desligado por padrão** (ver abaixo) |
+| `POST /api/internal/conversations` | Cria uma conversa. **Desligado por padrão** |
+| `GET /api/internal/conversations` | Lista as conversas, da mais recente para a mais antiga |
+| `GET /api/internal/conversations/:id/messages` | Histórico de uma conversa |
+| `POST /api/internal/conversations/:id/messages` | Faz uma pergunta `{"question": "..."}`; a resposta vem em streaming (SSE) |
 
 Todo SQL enviado ao endpoint passa pela guarda SQL e depois pelo executor (transação
 somente leitura, timeout no banco e na aplicação, no máximo `QUERY_MAX_ROWS` linhas).
@@ -194,7 +198,31 @@ Se a porta 5432 já estiver em uso na máquina, mude `DB_PORT` no `.env`.
 O fluxo completo já existe como serviço (`AskService`): a LLM recebe o schema exposto e
 a pergunta, gera o SQL, a guarda valida, o executor roda e a LLM explica o resultado e
 sugere a visualização (tabela, barra ou linha). Se o SQL for recusado, a LLM tem uma
-nova tentativa recebendo o motivo. O endpoint HTTP chega na Fase 05, com streaming.
+nova tentativa recebendo o motivo.
+
+Pela API, a pergunta é feita dentro de uma conversa e a resposta chega como
+Server-Sent Events, nesta ordem:
+
+| Evento | Conteúdo |
+|---|---|
+| `sql` | O SQL gerado (um evento por tentativa) |
+| `rows` | Colunas, linhas e a sugestão de visualização |
+| `token` | Um pedaço da explicação; vários eventos, na ordem |
+| `done` | Fim: id da mensagem, tentativas e tokens gastos |
+| `error` | Encerra o stream a qualquer momento, no formato padrão de erro |
+
+```sh
+ID=$(curl -s -X POST http://localhost:3000/api/internal/conversations | jq -r .id)
+curl -N -X POST http://localhost:3000/api/internal/conversations/$ID/messages \
+  -H 'content-type: application/json' \
+  -d '{"question":"Qual o faturamento total por categoria de produto?"}'
+```
+
+Perguntas seguintes na mesma conversa enxergam as anteriores ("e só da região Sul?").
+A memória mantém as 6 mensagens mais recentes na íntegra e resume as mais antigas. Se
+o cliente fechar a conexão no meio da resposta, a chamada à LLM e a consulta ao banco
+são canceladas. O histórico guarda perguntas, SQL e explicações — nunca as linhas
+retornadas pelas consultas.
 
 Para experimentar com o provedor real, crie uma chave em
 <https://aistudio.google.com/apikey>, coloque em `GEMINI_API_KEY` no `.env` e rode:
