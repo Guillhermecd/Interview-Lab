@@ -11,6 +11,12 @@ const DEFAULT_QUERY_MAX_ROWS = 1000;
 const DEFAULT_STATEMENT_TIMEOUT_MS = 5000;
 const DEFAULT_APP_TIMEOUT_MS = 7000;
 
+const DEFAULT_LLM_MODEL = 'gemini-3.8-flash';
+const DEFAULT_LLM_TIMEOUT_MS = 30_000;
+const MAX_LLM_TIMEOUT_MS = 120_000;
+const DEFAULT_EXPLAIN_MAX_ROWS = 50;
+const MAX_EXPLAIN_ROWS = 1000;
+
 const MAX_POOL_SIZE = 100;
 const MAX_QUERY_ROWS = 10_000;
 const MIN_TIMEOUT_MS = 100;
@@ -39,10 +45,21 @@ export interface QueryEnv {
   internalEndpointEnabled: boolean;
 }
 
+export interface LlmEnv {
+  // Absent until a key is configured; the application still starts, and asking
+  // a question reports that the LLM is not configured.
+  geminiApiKey: string | undefined;
+  model: string;
+  timeoutMs: number;
+  // Rows of a query result sent to the LLM to write the explanation.
+  explainMaxRows: number;
+}
+
 export interface AppEnv {
   port: number;
   database: ReadonlyDatabaseEnv;
   query: QueryEnv;
+  llm: LlmEnv;
 }
 
 export function loadDatabaseConnectionEnv(source: NodeJS.ProcessEnv): DatabaseConnectionEnv {
@@ -53,7 +70,7 @@ export function loadDatabaseConnectionEnv(source: NodeJS.ProcessEnv): DatabaseCo
   };
 }
 
-function loadQueryEnv(source: NodeJS.ProcessEnv): QueryEnv {
+export function loadQueryEnv(source: NodeJS.ProcessEnv): QueryEnv {
   const timeoutRange = { min: MIN_TIMEOUT_MS, max: MAX_TIMEOUT_MS };
   const query = {
     maxRows: parseInteger(source, 'QUERY_MAX_ROWS', {
@@ -81,6 +98,28 @@ function loadQueryEnv(source: NodeJS.ProcessEnv): QueryEnv {
   return query;
 }
 
+function optionalValue(source: NodeJS.ProcessEnv, variable: string): string | undefined {
+  const value = source[variable];
+  return value === undefined || value === '' ? undefined : value;
+}
+
+export function loadLlmEnv(source: NodeJS.ProcessEnv): LlmEnv {
+  return {
+    geminiApiKey: optionalValue(source, 'GEMINI_API_KEY'),
+    model: optionalValue(source, 'LLM_MODEL') ?? DEFAULT_LLM_MODEL,
+    timeoutMs: parseInteger(source, 'LLM_TIMEOUT_MS', {
+      defaultValue: DEFAULT_LLM_TIMEOUT_MS,
+      min: MIN_TIMEOUT_MS,
+      max: MAX_LLM_TIMEOUT_MS,
+    }),
+    explainMaxRows: parseInteger(source, 'LLM_EXPLAIN_MAX_ROWS', {
+      defaultValue: DEFAULT_EXPLAIN_MAX_ROWS,
+      min: 1,
+      max: MAX_EXPLAIN_ROWS,
+    }),
+  };
+}
+
 export function loadEnv(source: NodeJS.ProcessEnv): AppEnv {
   return {
     port: parseInteger(source, 'PORT', { defaultValue: DEFAULT_PORT, ...PORT_RANGE }),
@@ -94,5 +133,6 @@ export function loadEnv(source: NodeJS.ProcessEnv): AppEnv {
       }),
     },
     query: loadQueryEnv(source),
+    llm: loadLlmEnv(source),
   };
 }

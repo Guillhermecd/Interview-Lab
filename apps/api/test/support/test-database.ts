@@ -70,6 +70,12 @@ export async function startTestDatabase(): Promise<TestDatabase> {
         poolMax: TEST_POOL_MAX,
       },
       query: { ...DEFAULT_TEST_QUERY_ENV, ...query },
+      llm: {
+        geminiApiKey: undefined,
+        model: 'test-model',
+        timeoutMs: 5000,
+        explainMaxRows: 50,
+      },
     }),
     stop: async () => {
       await container.stop();
