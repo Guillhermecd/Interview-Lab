@@ -103,6 +103,8 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Motivo:** fluxo simples para projeto de um desenvolvedor, alinhado ao `CLAUDE.md` §3.
 - **Exceção registrada:** o commit inicial (somente documentação) foi feito direto na `main`, porque o repositório remoto estava vazio.
 - **Exceção registrada:** o squash merge do PR #1 (Fase 00) foi executado pelo Claude a pedido explícito do Guilherme, com o CI verde.
+- **Exceção registrada:** o squash merge do PR #2 (Fase 01) foi executado pelo Claude, com o CI verde, interpretando "siga adiante" como autorização; não houve pedido explícito de merge.
+- **Regra a partir de 2026-10-02 (Fase 02 em diante):** o Claude faz push, abre o PR e executa o squash merge quando o CI estiver verde. Se o CI não ficar verde, o Claude explica o motivo ao Guilherme antes de qualquer outra ação. Isto substitui "merge feito pelo Guilherme" da proposta original.
 
 ### D-13 — Precedência entre `PLANO.md` e os documentos de padrões em `template/`
 - **Contexto:** os documentos de padrões descrevem outra stack (Sails.js/Spring Boot, Ant Design, pastas `backend/` e `frontend/`, npm, porta 1337, fluxo com `develop`), o que contradiz o `PLANO.md`.
@@ -172,3 +174,11 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Escolha:** revogar no banco, por migration, com teste; a guarda SQL continua bloqueando `lo_*` como segunda camada
 - **Data:** 2026-10-02
 - **Motivo:** defesa em camadas — a brecha é fechada na fronteira real (o banco), sem depender da guarda.
+
+### D-22 — Endpoint interno de execução antes da guarda SQL
+- **Contexto:** a Fase 02 entrega um endpoint que executa SQL "já validado", mas a guarda SQL só existe na Fase 03. Até lá o endpoint aceitaria SQL cru, protegido apenas pela role read-only e pelos limites do executor.
+- **Opções:** endpoint atrás de flag, desligado por padrão | só o serviço, sem endpoint HTTP | endpoint sempre ativo
+- **Status:** DECIDIDA
+- **Escolha:** `POST /api/internal/queries/execute` só é registrado com `INTERNAL_QUERY_ENDPOINT_ENABLED=true`; o padrão é `false`
+- **Data:** 2026-10-02
+- **Motivo:** cumpre a entrega do `PLANO.md` e permite testar por HTTP sem expor SQL cru por padrão. A partir da Fase 03 a guarda SQL entra na frente do executor.

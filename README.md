@@ -4,10 +4,11 @@ Chat em linguagem natural sobre um banco PostgreSQL. A IA gera o SQL, o usuário
 revisar e editar, o backend valida e executa com segurança, e a resposta volta como
 tabela ou gráfico acompanhada de uma explicação, em streaming.
 
-> **Status:** projeto em construção. Existem a fundação do repositório (Fase 00) e o banco
-> de demonstração com a role read-only (Fase 01). O fluxo de chat, a guarda SQL e os
-> limites de execução descritos abaixo estão **planejados**, ainda não implementados.
-> Este README será expandido na Fase 09 com arquitetura detalhada e GIF de demonstração.
+> **Status:** projeto em construção. Existem a fundação do repositório (Fase 00), o banco
+> de demonstração com a role read-only (Fase 01) e o executor de queries com timeout e
+> limite de linhas (Fase 02). A guarda SQL, a integração com a LLM e o chat descritos
+> abaixo estão **planejados**, ainda não implementados. Este README será expandido na
+> Fase 09 com arquitetura detalhada e GIF de demonstração.
 
 ## Como vai funcionar
 
@@ -72,7 +73,7 @@ necessárias.
 |---|---|---|
 | 00 | Fundação do repositório e CI | Concluída |
 | 01 | Banco de demonstração e usuário read-only | Concluída |
-| 02 | Executor de queries seguro | Pendente |
+| 02 | Executor de queries seguro | Concluída |
 | 03 | Guarda SQL (parser e validação) | Pendente |
 | 04 | Integração com LLM (texto → SQL → explicação) | Pendente |
 | 05 | Streaming SSE, histórico e memória resumida | Pendente |
@@ -121,7 +122,36 @@ pnpm --filter @interview-lab/api dev
 pnpm --filter @interview-lab/web dev
 ```
 
-Por enquanto a API expõe apenas o health check e o web apenas uma página estática.
+Por enquanto o web é apenas uma página estática. A API expõe:
+
+| Rota | Descrição |
+|---|---|
+| `GET /api/health` | `200 {"status":"ok"}` quando a aplicação e o banco respondem; `503` caso contrário |
+| `POST /api/internal/queries/execute` | Executa `{"sql": "..."}` como `app_readonly`. **Desligado por padrão** (ver abaixo) |
+
+O endpoint de execução ainda **não passa pela guarda SQL**, que chega na Fase 03. Por
+isso só existe quando `INTERNAL_QUERY_ENDPOINT_ENABLED=true` no `.env`; use apenas em
+testes locais. Mesmo ligado, cada execução roda em transação somente leitura, aceita um
+único statement de consulta, tem timeout no banco e na aplicação e devolve no máximo
+`QUERY_MAX_ROWS` linhas.
+
+```sh
+curl -X POST http://localhost:3000/api/internal/queries/execute \
+  -H 'content-type: application/json' \
+  -d '{"sql":"SELECT name FROM regions ORDER BY name"}'
+```
+
+```json
+{
+  "columns": [{ "name": "name", "type": "text" }],
+  "rows": [["Centro-Oeste"], ["Nordeste"], ["Norte"], ["Sudeste"], ["Sul"]],
+  "rowCount": 5,
+  "truncated": false,
+  "durationMs": 7
+}
+```
+
+Erros seguem sempre o formato `{ "code", "message", "details"? }`.
 
 Comandos de banco (`pnpm --filter @interview-lab/api <comando>`):
 
