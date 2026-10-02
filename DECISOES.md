@@ -71,7 +71,9 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Trade-off:** só Postgres = menos um serviço para operar; Redis é o padrão de mercado para rate limit
   e cache e conta pontos no portfólio, mas é mais um container e mais um ponto de falha.
 - **Recomendação:** Postgres + Redis.
-- **Status:** PENDENTE
+- **Status:** DECIDIDA EM PARTE
+- **Escolha (2026-10-02):** histórico de conversas e mensagens no Postgres, schema `app`. O uso de Redis para cache e rate limit será decidido na Fase 08, que é quando eles entram.
+- **Motivo:** a Fase 05 só precisa do histórico, que fica no Postgres nas duas opções.
 
 ### D-08 — Autenticação
 - **Opções:** JWT próprio simples | provedor externo | sem auth (usuário fixo)
@@ -221,3 +223,17 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Escolha:** até **50 linhas** (`LLM_EXPLAIN_MAX_ROWS`), com a LLM informada de quantas linhas existem e se houve corte; o usuário continua recebendo todas as linhas na tabela
 - **Data:** 2026-10-02
 - **Motivo:** custo de tokens previsível e menos dados do banco saindo para o provedor.
+
+### D-27 — Memória resumida das conversas
+- **Opções:** quantas mensagens recentes manter na íntegra e quando regenerar o resumo
+- **Status:** DECIDIDA
+- **Escolha:** manter as **6 mensagens mais recentes** na íntegra; quando houver 6 ou mais mensagens além dessas ainda fora do resumo, a LLM gera um novo resumo incorporando-as
+- **Data:** 2026-10-02
+- **Motivo:** contexto suficiente para perguntas de continuação ("e por produto?") sem crescer o prompt indefinidamente. Cada regeneração é uma chamada extra à LLM.
+
+### D-28 — Dono das conversas antes da autenticação
+- **Opções:** conversas sem dono, com os endpoints atrás da flag interna | antecipar a autenticação
+- **Status:** DECIDIDA
+- **Escolha:** conversas sem dono até a Fase 08; os endpoints de conversa só existem com `INTERNAL_QUERY_ENDPOINT_ENABLED=true` (a mesma flag da D-22)
+- **Data:** 2026-10-02
+- **Motivo:** manter a ordem das fases (D-10). Na Fase 08 as conversas passam a ter dono e os endpoints saem de trás da flag.
