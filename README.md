@@ -7,7 +7,8 @@ tabela ou gráfico acompanhada de uma explicação, em streaming.
 > **Status:** projeto em construção. Existem a fundação do repositório (Fase 00), o banco
 > de demonstração com a role read-only (Fase 01), o executor de queries com timeout e
 > limite de linhas (Fase 02) e a guarda SQL (Fase 03) — ou seja, as três camadas de
-> segurança. A integração com a LLM, o streaming e o chat descritos abaixo estão
+> segurança — e o fluxo pergunta → SQL → execução → explicação com a LLM (Fase 04), ainda
+> sem endpoint HTTP. O streaming e a interface de chat descritos abaixo estão
 > **planejados**, ainda não implementados. Este README será expandido na Fase 09 com
 > arquitetura detalhada e GIF de demonstração.
 
@@ -49,8 +50,10 @@ Regras complementares:
 | Parser SQL | `libpg-query` 17 (parser do próprio Postgres, mesma versão do banco) | D-04, D-24 |
 | Acesso ao banco | Driver `pg`, migrations em SQL puro com `node-pg-migrate` | D-19 |
 
-Provedor de LLM, biblioteca de gráficos, cache, autenticação e deploy ainda estão em
-aberto — ver [DECISOES.md](DECISOES.md).
+| LLM | Google Gemini atrás de uma interface própria (`LlmProvider`) | D-03 |
+
+Biblioteca de gráficos, cache, autenticação e deploy ainda estão em aberto — ver
+[DECISOES.md](DECISOES.md).
 
 ## Banco de dados
 
@@ -76,7 +79,7 @@ necessárias.
 | 01 | Banco de demonstração e usuário read-only | Concluída |
 | 02 | Executor de queries seguro | Concluída |
 | 03 | Guarda SQL (parser e validação) | Concluída |
-| 04 | Integração com LLM (texto → SQL → explicação) | Pendente |
+| 04 | Integração com LLM (texto → SQL → explicação) | Concluída |
 | 05 | Streaming SSE, histórico e memória resumida | Pendente |
 | 06 | Frontend: chat, tabela, gráfico, editor SQL | Pendente |
 | 07 | Human-in-the-loop (revisar/editar SQL) | Pendente |
@@ -185,6 +188,29 @@ Comandos de banco (`pnpm --filter @interview-lab/api <comando>`):
 | `db:seed` | Recarrega os dados de demonstração (apaga e insere de novo) |
 
 Se a porta 5432 já estiver em uso na máquina, mude `DB_PORT` no `.env`.
+
+### Perguntas em linguagem natural
+
+O fluxo completo já existe como serviço (`AskService`): a LLM recebe o schema exposto e
+a pergunta, gera o SQL, a guarda valida, o executor roda e a LLM explica o resultado e
+sugere a visualização (tabela, barra ou linha). Se o SQL for recusado, a LLM tem uma
+nova tentativa recebendo o motivo. O endpoint HTTP chega na Fase 05, com streaming.
+
+Para experimentar com o provedor real, crie uma chave em
+<https://aistudio.google.com/apikey>, coloque em `GEMINI_API_KEY` no `.env` e rode:
+
+```sh
+pnpm --filter @interview-lab/api eval:llm
+```
+
+O comando faz dez perguntas de avaliação e imprime, para cada uma, o SQL gerado, as
+primeiras linhas, a explicação e os tokens gastos. Sem a chave, a API sobe normalmente
+e só as perguntas falham.
+
+As linhas lidas do banco são enviadas à LLM apenas para a explicação (no máximo
+`LLM_EXPLAIN_MAX_ROWS`, padrão 50) e tratadas como conteúdo não confiável: ficam em um
+bloco de dados separado das instruções, e a resposta da LLM é validada antes de ser
+usada.
 
 ### Verificação
 

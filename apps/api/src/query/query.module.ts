@@ -9,6 +9,7 @@ import { QueryController } from './query.controller.js';
 import { QueryExecutor } from './query-executor.service.js';
 import { QUERY_ENV, READONLY_POOL, SQL_GUARD } from './query.tokens.js';
 import { createReadonlyPool } from './readonly-pool.js';
+import { SchemaCatalog } from './schema-catalog.service.js';
 
 @Module({})
 export class QueryModule implements OnModuleDestroy {
@@ -34,10 +35,11 @@ export class QueryModule implements OnModuleDestroy {
         QueryExecutor,
         GuardedQueryService,
         DatabaseHealth,
+        SchemaCatalog,
       ],
       // The pool and QueryExecutor stay private: outside this module, SQL only
       // runs through GuardedQueryService.
-      exports: [GuardedQueryService, DatabaseHealth],
+      exports: [GuardedQueryService, DatabaseHealth, SchemaCatalog],
     };
   }
 

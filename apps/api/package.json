@@ -14,9 +14,11 @@
     "db:migrate:down": "pnpm build && node --env-file-if-exists=../../.env dist/database/cli.js migrate:down",
     "db:provision": "pnpm build && node --env-file-if-exists=../../.env dist/database/cli.js provision",
     "db:seed": "pnpm build && node --env-file-if-exists=../../.env dist/database/cli.js seed",
-    "db:setup": "pnpm build && node --env-file-if-exists=../../.env dist/database/cli.js setup"
+    "db:setup": "pnpm build && node --env-file-if-exists=../../.env dist/database/cli.js setup",
+    "eval:llm": "pnpm build && node --env-file-if-exists=../../.env dist/ask/evaluation-cli.js"
   },
   "dependencies": {
+    "@google/genai": "^2.25.0",
     "@interview-lab/shared": "workspace:*",
     "@nestjs/common": "^12.1.2",
     "@nestjs/core": "^12.1.2",

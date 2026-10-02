@@ -36,3 +36,47 @@ export interface QueryResult {
 export interface ExecuteQueryRequest {
   sql: string;
 }
+
+export const VISUALIZATION_TYPES = ['table', 'bar', 'line'] as const;
+export type VisualizationType = (typeof VISUALIZATION_TYPES)[number];
+
+export interface VisualizationSuggestion {
+  type: VisualizationType;
+  // Column names of the result, present for bar and line charts.
+  xColumn?: string;
+  yColumn?: string;
+}
+
+// Tokens spent with the LLM provider to answer one question.
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  calls: number;
+}
+
+export interface AskRequest {
+  question: string;
+}
+
+export interface AnsweredQuestion {
+  status: 'answered';
+  question: string;
+  // The SQL written by the LLM, before the guard adjusted its LIMIT.
+  sql: string;
+  result: QueryResult;
+  explanation: string;
+  visualization: VisualizationSuggestion;
+  // How many times SQL was generated: 2 when the first attempt was refused.
+  attempts: number;
+  usage: TokenUsage;
+}
+
+// The LLM judged that the exposed data cannot answer the question.
+export interface UnansweredQuestion {
+  status: 'not_answerable';
+  question: string;
+  reason: string;
+  usage: TokenUsage;
+}
+
+export type AskResponse = AnsweredQuestion | UnansweredQuestion;

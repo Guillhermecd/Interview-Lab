@@ -25,7 +25,34 @@ describe('loadEnv', () => {
         appTimeoutMs: 7000,
         internalEndpointEnabled: false,
       },
+      llm: {
+        geminiApiKey: undefined,
+        model: 'gemini-3.5-flash-lite',
+        timeoutMs: 30_000,
+        explainMaxRows: 50,
+      },
     });
+  });
+
+  it('reads the LLM variables', () => {
+    const env = loadEnv({
+      ...REQUIRED_ENV,
+      GEMINI_API_KEY: 'test-key',
+      LLM_MODEL: 'gemini-3.8-flash',
+      LLM_TIMEOUT_MS: '10000',
+      LLM_EXPLAIN_MAX_ROWS: '20',
+    });
+
+    expect(env.llm).toEqual({
+      geminiApiKey: 'test-key',
+      model: 'gemini-3.8-flash',
+      timeoutMs: 10_000,
+      explainMaxRows: 20,
+    });
+  });
+
+  it('starts without an LLM key', () => {
+    expect(loadEnv({ ...REQUIRED_ENV, GEMINI_API_KEY: '' }).llm.geminiApiKey).toBeUndefined();
   });
 
   it('reads every optional variable', () => {
@@ -64,6 +91,8 @@ describe('loadEnv', () => {
     ['QUERY_MAX_ROWS', '10001'],
     ['QUERY_STATEMENT_TIMEOUT_MS', '50'],
     ['DB_POOL_MAX', '0'],
+    ['LLM_TIMEOUT_MS', '10'],
+    ['LLM_EXPLAIN_MAX_ROWS', '0'],
     ['INTERNAL_QUERY_ENDPOINT_ENABLED', 'yes'],
   ])('rejects %s=%s', (variable, value) => {
     expect(() => loadEnv({ ...REQUIRED_ENV, [variable]: value })).toThrow(InvalidEnvError);
