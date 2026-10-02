@@ -7,10 +7,10 @@
 - **`AstValidator`** (`ast-validator.ts`): percorre a árvore inteira e recusa tudo o que não está liberado.
 - **`ast-schema.ts`:** lista de tipos de nó aceitos e, dentro de cada um, dos campos aceitos.
 - **`allowlists.ts`:** tabelas expostas, funções, tipos de conversão e palavras-chave de data/hora permitidas.
-- **`GuardedQueryService`** (`src/query/guarded-query.service.ts`): único ponto de entrada para executar SQL — guarda, depois executor. O `QueryExecutor` deixou de ser exportado pelo módulo.
+- **`GuardedQueryService`** (`src/query/guarded-query.service.ts`): único ponto de entrada para executar SQL — guarda, depois executor. O `QueryExecutor` e o pool de conexões deixaram de ser exportados pelo módulo; o health check passou a usar um serviço `DatabaseHealth` que só sabe fazer `ping`. Um teste unitário fixa a lista de exportações do módulo.
 - **Endpoint interno** passa a usar o `GuardedQueryService`; recusas saem como `422 QUERY_REJECTED` com o motivo em `details`.
 - **`libpg-query` fixado em `17.7.4`** (D-24). O parser é carregado uma vez na inicialização da aplicação.
-- **Testes:** 249 unitários da guarda (corpus de ataques e de consultas legítimas) e 39 de integração novos. O teste de fumaça do parser da Fase 00 foi removido: o corpus o substitui.
+- **Testes:** 250 unitários da guarda (corpus de ataques e de consultas legítimas) e 39 de integração novos. O teste de fumaça do parser da Fase 00 foi removido: o corpus o substitui.
 - **Documentação:** D-23, D-24 e D-25 em `DECISOES.md`; tabela "O que a guarda SQL aceita" no `README.md`; `.env.example`; Fase 03 marcada `CONCLUÍDA` no `PLANO.md` (vale com o merge).
 
 ## 2. Por que foi feito assim
@@ -53,7 +53,7 @@ Executado com `pnpm verify` em Windows 11, Node 24.15, pnpm 12.8.1, Docker 29.1.
 |---|---|---|
 | Lint | ✅ | ESLint sem erros; Prettier sem diferenças |
 | Typecheck | ✅ | `shared`, `api`, `web` |
-| Testes unitários | ✅ | 303 passaram / 303 total (API 302, web 1) |
+| Testes unitários | ✅ | 307 passaram / 307 total (API 306, web 1) |
 | Testes de integração | ✅ | 118 passaram / 118 total |
 | Build | ✅ | `shared`, `api`, `web` |
 
@@ -67,7 +67,7 @@ Corpus de ataques (critério do `PLANO.md`), todos recusados:
 - **Contrabando por CTE:** nome de catálogo, uso fora do escopo, referência a CTE posterior, auto-referência.
 - **JOINs:** 6 JOINs explícitos, por vírgula, mistos, e divididos entre subquery, CTE, ramos de `UNION` e subquery de `WHERE`.
 - **`LIMIT`:** expressão, subquery, string, conversão, negativo, `WITH TIES`; `LIMIT` de subquery ou de um ramo de `UNION` não conta como limite de topo.
-- **Complexidade:** 400 chamadas de função aninhadas e 200 subqueries aninhadas são recusadas sem derrubar o processo, e a guarda continua funcionando depois.
+- **Complexidade:** 400 chamadas de função aninhadas e 200 subqueries aninhadas são recusadas com `QUERY_TOO_COMPLEX`. O aninhamento mais profundo que cabe nos 10.000 caracteres aceitos pela API (1.998 níveis) também é recusado, e a guarda continua aceitando consultas normais em seguida.
 
 Consultas legítimas (critério do `PLANO.md`), todas aceitas:
 - 15 consultas de negócio, entre elas "faturamento por região no último trimestre", total acumulado com janela, ranking por categoria, `ROLLUP`, calendário com `generate_series`.
@@ -80,7 +80,7 @@ Testes de integração específicos:
 - **Recusas não chegam ao banco:** `SELECT pg_sleep(30)` é recusado em menos de 1s.
 - **HTTP:** `UPDATE`, `pg_sleep`, `pg_authid` e dois statements enviados direto ao endpoint voltam `422 QUERY_REJECTED`.
 
-Clone limpo: `pnpm install --frozen-lockfile` + `pnpm verify` — resultado em §4.
+Clone limpo: `pnpm install --frozen-lockfile` + `pnpm verify` passaram por completo.
 
 ## 4. Erros e problemas encontrados
 - **A guarda aceitava `LIMIT -1`.** O teste do corpus pegou. Não era brecha (o PostgreSQL recusa `LIMIT` negativo na execução), mas a guarda agora recusa.
@@ -88,6 +88,9 @@ Clone limpo: `pnpm install --frozen-lockfile` + `pnpm verify` — resultado em �
   - Um caso de "JOINs escondidos em subquery" somava 5 JOINs, não 6; acrescentei um JOIN.
   - Esperei que 400 parênteses aninhados fossem recusados; o parser descarta parênteses redundantes, então a árvore não fica profunda. O teste passou a afirmar que isso é aceito, e a profundidade é exercitada com chamadas de função aninhadas.
   - Um teste de integração esperava uma promise rejeitada, mas `GuardedQueryService.run` lançava a exceção de forma síncrona. Corrigi o serviço (agora `async`), não o teste.
+- **O pool read-only ainda era exportado pelo módulo** depois de a guarda estar ligada, o que permitiria a outro módulo executar SQL sem passar por ela. Encontrado na revisão final, antes do PR, e corrigido (ver §1).
+- **Os testes de profundidade aceitavam dois resultados** (`QUERY_TOO_COMPLEX` ou erro de sintaxe) e por isso não provavam que a regra disparava. Agora exigem `QUERY_TOO_COMPLEX`.
+- **Falha intermitente do processo de teste no Windows** (relatório da Fase 02): não se repetiu nas execuções completas de `pnpm verify` desta fase.
 - **Parser na versão errada**, detectado antes de escrever a guarda e resolvido pela D-24.
 - **Tipos TypeScript:** a versão 17 do `libpg-query` devolve a árvore como `any`. A guarda trata a árvore como `unknown` e confere cada formato em tempo de execução, o que combina com a estratégia de recusar o desconhecido.
 
@@ -103,7 +106,6 @@ Clone limpo: `pnpm install --frozen-lockfile` + `pnpm verify` — resultado em �
 - **Expressões regulares** (`~`, `SIMILAR TO`) são aceitas; uma expressão patológica é limitada pelo timeout.
 - **`ORDER BY` em query embrulhada** depende de comportamento do PostgreSQL, não do padrão SQL (D-25). Coberto por teste.
 - **Endpoint interno sem autenticação nem rate limit** até a Fase 08; continua atrás da flag (D-22).
-- **Falha intermitente do processo de teste no Windows** (relatório da Fase 02): status em §4.
 - **Dívidas herdadas:** TypeScript 6.0, `dev` da API sem watch.
 
 ## 7. Próximo passo proposto
