@@ -102,7 +102,8 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Data:** 2026-10-02
 - **Motivo:** fluxo simples para projeto de um desenvolvedor, alinhado ao `CLAUDE.md` §3.
 - **Exceção registrada:** o commit inicial (somente documentação) foi feito direto na `main`, porque o repositório remoto estava vazio.
-- **Exceção registrada:** os squash merges dos PRs #1 (Fase 00) e #2 (Fase 01) foram executados pelo Claude a pedido do Guilherme, com o CI verde.
+- **Exceção registrada:** o squash merge do PR #1 (Fase 00) foi executado pelo Claude a pedido explícito do Guilherme, com o CI verde.
+- **Exceção registrada:** o squash merge do PR #2 (Fase 01) foi executado pelo Claude, com o CI verde, interpretando "siga adiante" como autorização; não houve pedido explícito de merge. Regra para os próximos PRs em aberto.
 
 ### D-13 — Precedência entre `PLANO.md` e os documentos de padrões em `template/`
 - **Contexto:** os documentos de padrões descrevem outra stack (Sails.js/Spring Boot, Ant Design, pastas `backend/` e `frontend/`, npm, porta 1337, fluxo com `develop`), o que contradiz o `PLANO.md`.
