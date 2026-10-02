@@ -3,6 +3,7 @@ import type { Pool } from 'pg';
 import { loadModule } from 'libpg-query';
 import type { AppEnv } from '../config/env.js';
 import { MAX_JOINS, SqlGuard } from '../sql-guard/sql-guard.js';
+import { DatabaseHealth } from './database-health.service.js';
 import { GuardedQueryService } from './guarded-query.service.js';
 import { QueryController } from './query.controller.js';
 import { QueryExecutor } from './query-executor.service.js';
@@ -16,7 +17,7 @@ export class QueryModule implements OnModuleDestroy {
   static register(env: AppEnv): DynamicModule {
     return {
       module: QueryModule,
-      // One pool for the whole application, shared with the health check.
+      // Global so the health check can use DatabaseHealth without re-registering the pool.
       global: true,
       controllers: env.query.internalEndpointEnabled ? [QueryController] : [],
       providers: [
@@ -32,10 +33,11 @@ export class QueryModule implements OnModuleDestroy {
         },
         QueryExecutor,
         GuardedQueryService,
+        DatabaseHealth,
       ],
-      // QueryExecutor stays private: outside this module, SQL only runs
-      // through GuardedQueryService.
-      exports: [GuardedQueryService, READONLY_POOL],
+      // The pool and QueryExecutor stay private: outside this module, SQL only
+      // runs through GuardedQueryService.
+      exports: [GuardedQueryService, DatabaseHealth],
     };
   }
 
