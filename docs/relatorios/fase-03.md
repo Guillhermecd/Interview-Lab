@@ -95,6 +95,8 @@ Clone limpo: `pnpm install --frozen-lockfile` + `pnpm verify` passaram por compl
 - **Tipos TypeScript:** a versão 17 do `libpg-query` devolve a árvore como `any`. A guarda trata a árvore como `unknown` e confere cada formato em tempo de execução, o que combina com a estratégia de recusar o desconhecido.
 
 ## 5. Decisões que preciso que você tome
+Respondidas em 2026-10-02: push e PR autorizados; push e PR passam a ser permanentes (D-12); D-03 segue a recomendação (interface própria + um provedor), faltando escolher qual provedor. Perguntas originais:
+
 1. **Push e abertura do PR da Fase 03.** Nada foi enviado.
 2. **Push também vira regra permanente?** Hoje a regra registrada na D-12 cobre o merge com CI verde. Se quiser, passo a fazer push e PR ao fim de cada fase sem perguntar, e você revisa pelo relatório no PR.
 3. **D-03 — provedor de LLM**, necessária para a Fase 04. Opções do `DECISOES.md`: Anthropic | OpenAI | interface com os dois. Recomendação registrada: interface própria + um provedor implementado. Preciso saber qual provedor e, para os testes manuais com o provedor real, de uma chave de API no `.env` local (nunca commitada).
