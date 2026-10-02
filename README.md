@@ -107,7 +107,8 @@ Entregas e critérios de verificação de cada fase estão em [PLANO.md](PLANO.m
 
 ## Como rodar
 
-Pré-requisitos: Node.js 24, pnpm 12 e Docker.
+Pré-requisitos: Node.js 24 (no Windows, 24.21 ou mais recente — o 24.15 derruba o processo
+de teste de forma intermitente), pnpm 12 e Docker.
 
 ```sh
 pnpm install

@@ -159,6 +159,7 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Escolha:** Node 24 no CI e em `engines`; pnpm instalado globalmente via `npm install -g pnpm` (`corepack enable` falhou com `EPERM` sem terminal elevado)
 - **Data:** 2026-10-02
 - **Motivo:** mesma versão na máquina local e no CI.
+- **Ponto de atenção (2026-10-02):** o Node 24.15 no Windows derruba o processo de teste de forma intermitente (`0xC0000409`); 24.21 e 22.23 não. Usar 24.21 ou mais recente localmente. O CI usa a 24 mais recente e não é afetado. Detalhes no relatório da Fase 05.
 
 ### D-18 — Versão do PostgreSQL
 - **Opções:** 17 | 16

@@ -89,12 +89,31 @@ Clone limpo: `pnpm install --frozen-lockfile` + `pnpm verify` passaram por compl
 
 ## 4. Erros e problemas encontrados
 - **Teste antigo que não provava nada (Fase 02).** O teste do timeout da aplicação conferia no `pg_stat_activity` que nenhuma consulta com `pg_sleep` continuava rodando. Como o executor usa cursor, o banco mostra `FETCH ...`, não o texto original; a contagem era sempre zero e a asserção passava de qualquer jeito. Corrigido: o filtro agora procura o `FETCH`, e o teste primeiro confirma que a consulta está rodando (contagem 1) e depois que parou (contagem 0). O comportamento estava correto; o que faltava era prova.
+- **Queda intermitente do processo de teste no Windows: causa encontrada.** O problema registrado desde a Fase 02 (processo do Vitest encerrado com `0xC0000409`, sem nenhuma asserção falhar) voltou com mais frequência nesta fase. Investigação:
+  - Não depende de um arquivo: as quedas aconteceram em `readonly-role`, `query-executor`, `api` e `conversation`; o `readonly-role` sozinho rodou 12 vezes sem queda.
+  - Não depende do paralelismo: limitado a 2 processos, caiu 4 vezes em 10 (pior que o normal), e a mudança foi desfeita.
+  - Não deixa rastro: nem relatório de diagnóstico do Node (`--report-on-fatalerror`), nem evento de erro no Windows, nem mensagem no stderr — típico de falha nativa dentro do próprio `node.exe`.
+  - **Depende da versão do Node.** Mesma suíte, mesma máquina, binários oficiais portáteis (checksum conferido, baixados só na pasta temporária):
+
+    | Node | Execuções | Quedas |
+    |---|---|---|
+    | 24.15.0 (instalado na máquina) | 10 | 2 |
+    | 22.23.3 | 20 | 0 |
+    | 24.21.0 (mais recente da linha 24) | 15 | 0 |
+
+  - **Conclusão:** bug do Node 24.15 no Windows, já corrigido em versões posteriores da linha 24. Não é defeito do projeto. O CI não é afetado: usa Linux e o `.nvmrc` (`24`) resolve para a versão 24 mais recente.
+  - A verificação completa desta fase (`pnpm verify`) foi repetida com o Node 24.21: tudo verde.
+  - **Ação na máquina local:** atualizar o Node instalado para 24.21 ou mais recente (§5).
+- **Push antes da hora.** Em um comando encadeado, o push da branch aconteceu mesmo com uma execução de `pnpm verify` falhando (a queda acima). O PR só foi aberto depois da investigação e de uma verificação verde.
 - **Dois testes novos de desconexão falharam por erro do teste:**
   - Um desconectava logo no primeiro evento (`sql`); o servidor cancelava corretamente antes de chegar à explicação, e o teste esperava ver o cancelamento do stream da LLM. Passou a desconectar depois do primeiro `token`.
   - O outro não tratava a rejeição da leitura do corpo depois do `abort`.
 - Nenhum outro.
 
 ## 5. Decisões que preciso que você tome
+Ação sua, fora do código:
+- **Atualizar o Node.js da máquina para 24.21 ou mais recente** (https://nodejs.org). Com o 24.15 instalado hoje, a suíte de integração cai em cerca de 1 a cada 5 execuções.
+
 Para a Fase 06 (frontend):
 1. **D-06 — biblioteca de gráficos.** Opções: Recharts | Chart.js | ECharts. Recomendação registrada: Recharts.
 2. **Kit de interface.** O template usa Ant Design; pela D-13 a stack segue o `PLANO.md`, que não define kit. Opções: (a) Ant Design, como no template — componentes prontos (tabela, layout, formulário), bundle maior; (b) Tailwind CSS com componentes próprios — mais leve e mais trabalho; (c) outro. Recomendo (a) pela aderência ao template e pela tabela de resultados pronta.
