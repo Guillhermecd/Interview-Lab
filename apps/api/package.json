@@ -21,7 +21,7 @@
     "@nestjs/common": "^12.1.2",
     "@nestjs/core": "^12.1.2",
     "@nestjs/platform-fastify": "^12.1.2",
-    "libpg-query": "^18.1.5",
+    "libpg-query": "17.7.4",
     "node-pg-migrate": "^9.0.0",
     "pg": "^8.23.1",
     "reflect-metadata": "^0.2.2",
