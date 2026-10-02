@@ -76,6 +76,8 @@ Verificação adicional — API compilada contra o `docker compose` (porta 5455)
 - Nenhum outro.
 
 ## 5. Decisões que preciso que você tome
+Respondidas em 2026-10-02: push e PR autorizados; falha intermitente fica como está, com o CI em Linux como critério (opção a); o Claude passa a fazer o squash merge com o CI verde e, se o CI não ficar verde, explica o motivo antes de qualquer ação (registrado na D-12). Perguntas originais:
+
 1. **Push e abertura do PR da Fase 02.** Nada foi enviado.
 2. **Falha intermitente do processo de teste (§4).** Opções: (a) manter como está e tratar o CI em Linux como o critério — recomendado enquanto não se repetir; (b) rodar os arquivos de integração em série para reduzir containers simultâneos, ao custo de uma suíte mais lenta (de ~20s para ~1min).
 3. **Regra de merge.** Fiz o squash merge do PR #2 interpretando o seu "siga adiante" como autorização, sem pedido explícito de merge. Para os próximos PRs: posso fazer o squash merge quando o CI estiver verde, ou o merge volta a ser só seu? A resposta será registrada na D-12.
