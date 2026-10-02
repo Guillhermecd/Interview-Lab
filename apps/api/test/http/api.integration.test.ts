@@ -115,6 +115,29 @@ describe('API over HTTP', () => {
       expect(response.json()).toEqual({ code: 'NOT_FOUND', message: 'Recurso não encontrado.' });
     });
 
+    it.each([
+      ['malformed JSON', { 'content-type': 'application/json' }, '{"sql": '],
+      ['an unsupported content type', { 'content-type': 'text/plain' }, 'SELECT 1'],
+      [
+        'a body above the size limit',
+        { 'content-type': 'application/json' },
+        JSON.stringify({ sql: 'x'.repeat(2 * 1024 * 1024) }),
+      ],
+    ])('keeps the standard error format for %s', async (_case, headers, payload) => {
+      const response = await app.inject({ method: 'POST', url: EXECUTE_URL, headers, payload });
+      const body = response.json<Record<string, unknown>>();
+
+      expect(response.statusCode).toBeGreaterThanOrEqual(400);
+      expect(response.statusCode).toBeLessThan(500);
+      expect(body).toMatchObject({
+        code: expect.any(String) as string,
+        message: expect.any(String) as string,
+      });
+      // Fastify's own error shape must never reach the client.
+      expect(body).not.toHaveProperty('statusCode');
+      expect(body).not.toHaveProperty('error');
+    });
+
     it('never exposes a stack trace', async () => {
       const response = await execute({ sql: 'SELECT name::int FROM regions' });
 
