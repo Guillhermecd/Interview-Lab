@@ -111,6 +111,9 @@ describe('app_readonly role', () => {
       ['CREATE TEMP TABLE', 'CREATE TEMP TABLE intruder (id int)'],
       ['CREATE SCHEMA', 'CREATE SCHEMA intruder'],
       ['CREATE ROLE', 'CREATE ROLE intruder'],
+      ['creating a large object', 'SELECT lo_create(0)'],
+      ['writing a large object', "SELECT lo_from_bytea(0, 'payload')"],
+      ['reading a large object', 'SELECT lo_get(1)'],
     ])('denies %s', async (_statement, sql) => {
       await expectPgError(
         asReadonlyWithWritesEnabled((client) => client.query(sql)),
