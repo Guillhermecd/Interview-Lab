@@ -4,10 +4,10 @@ Chat em linguagem natural sobre um banco PostgreSQL. A IA gera o SQL, o usuário
 revisar e editar, o backend valida e executa com segurança, e a resposta volta como
 tabela ou gráfico acompanhada de uma explicação, em streaming.
 
-> **Status:** projeto em construção. A Fase 00 (fundação do repositório e CI) ainda não
-> foi concluída — nada descrito abaixo está implementado. Este README descreve o que
-> está **planejado** e será expandido na Fase 09 com arquitetura detalhada e GIF de
-> demonstração.
+> **Status:** projeto em construção. Existe apenas a fundação do repositório (Fase 00):
+> monorepo, lint, testes e CI. O fluxo de chat e as camadas de segurança descritos abaixo
+> estão **planejados**, ainda não implementados. Este README será expandido na Fase 09
+> com arquitetura detalhada e GIF de demonstração.
 
 ## Como vai funcionar
 
@@ -84,5 +84,37 @@ Entregas e critérios de verificação de cada fase estão em [PLANO.md](PLANO.m
 
 ## Como rodar
 
-As instruções de instalação e execução serão adicionadas ao final da Fase 00, quando
-existir código executável.
+Pré-requisitos: Node.js 24, pnpm 12 e Docker.
+
+```sh
+pnpm install
+cp .env.example .env
+
+# PostgreSQL 17 local
+docker compose up -d postgres
+
+# API em http://localhost:3000/api/health
+pnpm --filter @interview-lab/api dev
+
+# Web em http://localhost:5173 (outro terminal)
+pnpm --filter @interview-lab/web dev
+```
+
+Por enquanto a API expõe apenas o health check e o web apenas uma página estática.
+
+### Verificação
+
+```sh
+pnpm verify   # lint → typecheck → testes unitários → testes de integração → build
+```
+
+Cada etapa também roda isolada: `pnpm lint`, `pnpm typecheck`, `pnpm test`,
+`pnpm test:integration` (exige Docker em execução) e `pnpm build`.
+
+### Estrutura
+
+```text
+apps/api          # NestJS + Fastify
+apps/web          # React + Vite
+packages/shared   # Tipos e constantes compartilhados entre api e web
+```

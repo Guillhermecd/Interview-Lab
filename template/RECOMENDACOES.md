@@ -28,7 +28,18 @@ Executar na ordem, tudo deve passar:
 4. testes de integração (Postgres real via container)
 5. build de todos os apps
 
-Os comandos exatos serão definidos na Fase 00 e registrados aqui.
+Comandos (definidos na Fase 00), executados na raiz do repositório:
+
+| Etapa | Comando |
+|---|---|
+| 1. lint | `pnpm lint` (ESLint + checagem do Prettier) |
+| 2. typecheck | `pnpm typecheck` |
+| 3. testes unitários | `pnpm test` |
+| 4. testes de integração | `pnpm test:integration` (exige Docker em execução) |
+| 5. build | `pnpm build` |
+
+`pnpm verify` roda as cinco etapas na ordem e para na primeira falha. O CI
+(`.github/workflows/ci.yml`) executa os mesmos comandos.
 
 ## Testes
 - Toda regra da guarda SQL tem teste positivo e negativo.
