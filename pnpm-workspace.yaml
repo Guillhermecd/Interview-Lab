@@ -2,8 +2,10 @@ packages:
   - apps/*
   - packages/*
 
-# Dependências nativas opcionais do Testcontainers (cliente SSH); não são usadas.
 allowBuilds:
+  # Dependências nativas opcionais do Testcontainers (cliente SSH); não são usadas.
   cpu-features: false
   protobufjs: false
   ssh2: false
+  # O script de instalação é apenas um "echo"; não há nada para executar.
+  '@google/genai': false
