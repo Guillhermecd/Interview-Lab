@@ -219,7 +219,9 @@ curl -N -X POST http://localhost:3000/api/internal/conversations/$ID/messages \
 ```
 
 Perguntas seguintes na mesma conversa enxergam as anteriores ("e só da região Sul?").
-A memória mantém as 6 mensagens mais recentes na íntegra e resume as mais antigas. Se
+A memória envia à LLM um resumo das mensagens antigas mais as recentes na íntegra
+(de 6 a 11 mensagens: o resumo é refeito quando 6 ou mais ficam fora da janela das 6
+mais recentes). Se
 o cliente fechar a conexão no meio da resposta, a chamada à LLM e a consulta ao banco
 são canceladas. O histórico guarda perguntas, SQL e explicações — nunca as linhas
 retornadas pelas consultas.

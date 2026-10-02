@@ -71,9 +71,16 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Trade-off:** só Postgres = menos um serviço para operar; Redis é o padrão de mercado para rate limit
   e cache e conta pontos no portfólio, mas é mais um container e mais um ponto de falha.
 - **Recomendação:** Postgres + Redis.
-- **Status:** DECIDIDA EM PARTE
-- **Escolha (2026-10-02):** histórico de conversas e mensagens no Postgres, schema `app`. O uso de Redis para cache e rate limit será decidido na Fase 08, que é quando eles entram.
+- **Status:** DECIDIDA
+- **Escolha:** histórico de conversas e mensagens no Postgres, schema `app`. O armazenamento de cache e rate limit foi separado na D-07b.
+- **Data:** 2026-10-02
 - **Motivo:** a Fase 05 só precisa do histórico, que fica no Postgres nas duas opções.
+
+### D-07b — Armazenamento de cache e rate limit
+- **Opções:** Postgres (schema da aplicação) | Redis
+- **Trade-off:** o mesmo da D-07 — só Postgres é um serviço a menos para operar; Redis é o padrão de mercado para cache e rate limit, mas é mais um container e mais um ponto de falha.
+- **Recomendação:** Redis.
+- **Status:** PENDENTE (decidir antes da Fase 08)
 
 ### D-08 — Autenticação
 - **Opções:** JWT próprio simples | provedor externo | sem auth (usuário fixo)
@@ -230,6 +237,7 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Escolha:** manter as **6 mensagens mais recentes** na íntegra; quando houver 6 ou mais mensagens além dessas ainda fora do resumo, a LLM gera um novo resumo incorporando-as
 - **Data:** 2026-10-02
 - **Motivo:** contexto suficiente para perguntas de continuação ("e por produto?") sem crescer o prompt indefinidamente. Cada regeneração é uma chamada extra à LLM.
+- **Na prática:** a LLM recebe o resumo mais todas as mensagens ainda fora dele, ou seja, de 6 a 11 mensagens na íntegra. Cortar para exatamente 6 descartaria mensagens que ainda não entraram no resumo.
 
 ### D-28 — Dono das conversas antes da autenticação
 - **Opções:** conversas sem dono, com os endpoints atrás da flag interna | antecipar a autenticação

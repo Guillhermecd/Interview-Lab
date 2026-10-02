@@ -26,7 +26,7 @@ Entregas do `PLANO.md` e como cada uma foi atendida:
 |---|---|
 | Endpoint SSE com eventos tipados | `POST /api/internal/conversations/:id/messages`; eventos `sql`, `rows`, `token`, `done`, `error` |
 | Persistência de conversas e mensagens | `app.conversations` e `app.messages`; endpoints para criar, listar e ler o histórico |
-| Memória: últimas N + resumo | 6 mensagens recentes na íntegra; resumo regenerado quando há 6 ou mais fora dele (D-27) |
+| Memória: últimas N + resumo | Resumo das mensagens antigas + de 6 a 11 mensagens recentes na íntegra; o resumo é regenerado quando 6 ou mais mensagens ficam fora da janela das 6 mais recentes (D-27) |
 | Cancelamento na desconexão | O fechamento da conexão aborta a chamada à LLM e cancela a consulta no banco |
 
 Decisões aplicadas: **D-07** (histórico no Postgres), **D-27** (regra de memória), **D-28** (conversas sem dono, endpoints atrás da flag interna).
@@ -85,14 +85,13 @@ Outros testes:
 - Pergunta de continuação **"E só da região Sul?"** → o SQL gerado manteve o agrupamento por categoria e acrescentou o filtro da região Sul, usando o contexto da conversa.
 - Histórico lido pelo endpoint com as quatro mensagens. Log da API sem chave e sem texto das perguntas.
 
-Clone limpo: resultado registrado em §4.
+Clone limpo: `pnpm install --frozen-lockfile` + `pnpm verify` passaram por completo (406 unitários, 151 de integração).
 
 ## 4. Erros e problemas encontrados
 - **Teste antigo que não provava nada (Fase 02).** O teste do timeout da aplicação conferia no `pg_stat_activity` que nenhuma consulta com `pg_sleep` continuava rodando. Como o executor usa cursor, o banco mostra `FETCH ...`, não o texto original; a contagem era sempre zero e a asserção passava de qualquer jeito. Corrigido: o filtro agora procura o `FETCH`, e o teste primeiro confirma que a consulta está rodando (contagem 1) e depois que parou (contagem 0). O comportamento estava correto; o que faltava era prova.
 - **Dois testes novos de desconexão falharam por erro do teste:**
   - Um desconectava logo no primeiro evento (`sql`); o servidor cancelava corretamente antes de chegar à explicação, e o teste esperava ver o cancelamento do stream da LLM. Passou a desconectar depois do primeiro `token`.
   - O outro não tratava a rejeição da leitura do corpo depois do `abort`.
-- **Clone limpo:** PREENCHER.
 - Nenhum outro.
 
 ## 5. Decisões que preciso que você tome

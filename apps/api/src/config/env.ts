@@ -28,8 +28,8 @@ export interface DatabaseConnectionEnv {
   name: string;
 }
 
-// The API only ever receives the read-only credentials. Admin credentials are
-// read by the database CLI alone (src/database/database-env.ts).
+// The API never receives the admin credentials: those are read by the
+// database CLI alone (src/database/database-env.ts).
 export interface ReadonlyDatabaseEnv extends DatabaseConnectionEnv {
   readonlyPassword: string;
   poolMax: number;
