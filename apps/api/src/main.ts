@@ -9,7 +9,10 @@ const LISTEN_HOST = '0.0.0.0';
 
 async function bootstrap(): Promise<void> {
   const env = loadEnv(process.env);
-  const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter());
+  const app = await NestFactory.create<NestFastifyApplication>(
+    AppModule.register(env),
+    new FastifyAdapter(),
+  );
   configureApp(app);
   await app.listen(env.port, LISTEN_HOST);
 }
