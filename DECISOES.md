@@ -33,7 +33,11 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Trade-off:** a interface custa pouco e permite mocar nos testes; suportar dois provedores
   de verdade dobra testes de integração.
 - **Recomendação:** interface própria + um provedor implementado.
-- **Status:** PENDENTE
+- **Status:** DECIDIDA
+- **Escolha:** interface própria (`LlmProvider`) + um provedor implementado: **Google Gemini**, pela camada gratuita. Modelo padrão `gemini-3.8-flash` (faixa "equilibrada"), configurável por `LLM_MODEL`.
+- **Data:** 2026-10-02
+- **Motivo:** Anthropic e OpenAI não têm uso gratuito de API; o Gemini tem camada gratuita para os modelos Flash. A interface permite trocar de provedor depois escrevendo uma única classe.
+- **Ponto de atenção:** na camada gratuita o Google usa os dados enviados para melhorar seus produtos. Hoje são perguntas, o schema e linhas dos dados de demonstração. Rever antes de usar dados reais ou publicar (Fase 09).
 
 ### D-04 — Parser SQL
 - **Opções:** `node-sql-parser` | `pgsql-ast-parser` | `libpg-query` (parser real do Postgres)
@@ -209,3 +213,10 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Data:** 2026-10-02
 - **Motivo:** não coloca código de terceiros no caminho de segurança e não reformata o SQL do usuário (importante para o editor da Fase 07).
 - **Ponto de atenção:** no caso embrulhado, a preservação do `ORDER BY` interno não é garantida pelo padrão SQL; o PostgreSQL 17 preserva e há teste de integração cobrindo.
+
+### D-26 — Dados do resultado enviados à LLM para a explicação
+- **Opções:** até 50 linhas | até 200 linhas | todas (até 1000)
+- **Status:** DECIDIDA
+- **Escolha:** até **50 linhas** (`LLM_EXPLAIN_MAX_ROWS`), com a LLM informada de quantas linhas existem e se houve corte; o usuário continua recebendo todas as linhas na tabela
+- **Data:** 2026-10-02
+- **Motivo:** custo de tokens previsível e menos dados do banco saindo para o provedor.
