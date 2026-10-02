@@ -5,6 +5,11 @@ import type { LlmJsonRequest, LlmJsonResponse, LlmProvider } from './llm-provide
 const HTTP_TOO_MANY_REQUESTS = 429;
 // Low temperature: the same question should produce the same SQL.
 const TEMPERATURE = 0;
+// The provider answers 5xx when the model is overloaded; the SDK retries those
+// with exponential backoff. 429 is deliberately not retried: on the free tier
+// it means the daily quota is gone, and every retry would count against it.
+const MAX_HTTP_ATTEMPTS = 3;
+const RETRYABLE_HTTP_STATUS = [408, 500, 502, 503, 504];
 
 interface GeminiUsageMetadata {
   promptTokenCount?: number;
@@ -25,7 +30,10 @@ interface GeminiRequest {
     responseMimeType: 'application/json';
     responseJsonSchema: Record<string, unknown>;
     temperature: number;
-    httpOptions: { timeout: number };
+    httpOptions: {
+      timeout: number;
+      retryOptions: { attempts: number; httpStatusCodes: number[] };
+    };
   };
 }
 
@@ -81,7 +89,10 @@ export class GeminiLlmProvider implements LlmProvider {
           responseMimeType: 'application/json',
           responseJsonSchema: request.responseSchema,
           temperature: TEMPERATURE,
-          httpOptions: { timeout: this.options.timeoutMs },
+          httpOptions: {
+            timeout: this.options.timeoutMs,
+            retryOptions: { attempts: MAX_HTTP_ATTEMPTS, httpStatusCodes: RETRYABLE_HTTP_STATUS },
+          },
         },
       });
     } catch (error) {

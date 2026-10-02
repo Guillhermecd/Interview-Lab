@@ -41,7 +41,10 @@ describe('GeminiLlmProvider', () => {
           responseMimeType: 'application/json',
           responseJsonSchema: { type: 'object' },
           temperature: 0,
-          httpOptions: { timeout: 1234 },
+          httpOptions: {
+            timeout: 1234,
+            retryOptions: { attempts: 3, httpStatusCodes: [408, 500, 502, 503, 504] },
+          },
         },
       },
     ]);
