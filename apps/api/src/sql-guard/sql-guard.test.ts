@@ -596,23 +596,35 @@ describe('SqlGuard: complexity', () => {
     expectAccepted(`SELECT ${'('.repeat(depth)}1${')'.repeat(depth)}`);
   });
 
-  it('rejects deeply nested function calls', () => {
-    const depth = 400;
-    const sql = `SELECT ${'abs('.repeat(depth)}1${')'.repeat(depth)}`;
+  function nestedCalls(depth: number): string {
+    return `SELECT ${'abs('.repeat(depth)}1${')'.repeat(depth)}`;
+  }
 
-    expect(['QUERY_TOO_COMPLEX', 'SYNTAX_ERROR']).toContain(rejection(sql).rule);
+  it('accepts moderately nested function calls', () => {
+    expectAccepted(nestedCalls(50));
+  });
+
+  it('rejects deeply nested function calls', () => {
+    expectRejected(nestedCalls(400), 'QUERY_TOO_COMPLEX');
   });
 
   it('rejects deeply nested subqueries', () => {
     const depth = 200;
-    const sql = `${'SELECT * FROM ('.repeat(depth)}SELECT 1${') s'.repeat(depth)}`;
 
-    expect(['QUERY_TOO_COMPLEX', 'SYNTAX_ERROR']).toContain(rejection(sql).rule);
+    expectRejected(
+      `${'SELECT * FROM ('.repeat(depth)}SELECT 1${') s'.repeat(depth)}`,
+      'QUERY_TOO_COMPLEX',
+    );
   });
 
-  it('keeps working after rejecting a pathological query', () => {
-    rejection(`SELECT ${'abs('.repeat(400)}1${')'.repeat(400)}`);
+  // 1,998 levels is the deepest nesting that fits in the 10,000 characters the
+  // API accepts. The parser must survive it: a crashed parser would deny every
+  // query that came afterwards.
+  it('rejects the deepest nesting the API can receive and keeps working', () => {
+    const deepest = nestedCalls(1998);
+    expect(deepest.length).toBeLessThanOrEqual(10_000);
 
+    expectRejected(deepest, 'QUERY_TOO_COMPLEX');
     expectAccepted('SELECT id FROM regions LIMIT 1');
   });
 });
