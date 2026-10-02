@@ -97,15 +97,45 @@ describe('API over HTTP', () => {
       });
     });
 
-    it('returns a query error in the standard error format', async () => {
+    it('returns a guard rejection in the standard error format', async () => {
       const response = await execute({ sql: 'SELECT * FROM invoices' });
+
+      expect(response.statusCode).toBe(422);
+      expect(response.json()).toEqual({
+        code: 'QUERY_REJECTED',
+        message: 'A consulta foi recusada pelas regras de segurança.',
+        details: [
+          {
+            field: 'sql',
+            message:
+              'A tabela "invoices" não está disponível para consulta. ' +
+              'Tabelas disponíveis: regions, products, customers, orders, order_items.',
+          },
+        ],
+      });
+    });
+
+    it('returns a database error in the standard error format', async () => {
+      const response = await execute({ sql: 'SELECT totl FROM orders' });
 
       expect(response.statusCode).toBe(422);
       expect(response.json()).toEqual({
         code: 'QUERY_INVALID_REFERENCE',
         message: 'A consulta referencia uma tabela, coluna ou função que não existe.',
-        details: [{ field: 'sql', message: 'relation "invoices" does not exist' }],
+        details: [{ field: 'sql', message: 'column "totl" does not exist' }],
       });
+    });
+
+    it.each([
+      ['a write', "UPDATE regions SET name = 'x'"],
+      ['a dangerous function', 'SELECT pg_sleep(30)'],
+      ['a system catalog', 'SELECT * FROM pg_authid'],
+      ['two statements', 'SELECT 1; DROP TABLE regions'],
+    ])('refuses %s sent straight to the endpoint', async (_case, sql) => {
+      const response = await execute({ sql });
+
+      expect(response.statusCode).toBe(422);
+      expect(response.json()).toMatchObject({ code: 'QUERY_REJECTED' });
     });
 
     it('returns 404 in the standard error format for an unknown route', async () => {
