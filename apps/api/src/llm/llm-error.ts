@@ -3,6 +3,7 @@ export const LLM_ERROR_CODES = [
   'LLM_UNAVAILABLE',
   'LLM_RATE_LIMITED',
   'LLM_INVALID_RESPONSE',
+  'LLM_CANCELLED',
 ] as const;
 export type LlmErrorCode = (typeof LLM_ERROR_CODES)[number];
 
@@ -11,6 +12,7 @@ const MESSAGES: Record<LlmErrorCode, string> = {
   LLM_UNAVAILABLE: 'O serviço de IA está indisponível no momento.',
   LLM_RATE_LIMITED: 'O limite de uso do serviço de IA foi atingido. Tente novamente em instantes.',
   LLM_INVALID_RESPONSE: 'O serviço de IA devolveu uma resposta que não pôde ser usada.',
+  LLM_CANCELLED: 'A chamada ao serviço de IA foi cancelada.',
 };
 
 export class LlmError extends Error {

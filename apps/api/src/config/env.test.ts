@@ -6,6 +6,7 @@ const REQUIRED_ENV = {
   DB_HOST: 'localhost',
   DB_NAME: 'interview_lab',
   DB_READONLY_PASSWORD: 'readonly-secret',
+  DB_APP_PASSWORD: 'app-secret',
 };
 
 describe('loadEnv', () => {
@@ -17,6 +18,13 @@ describe('loadEnv', () => {
         port: 5432,
         name: 'interview_lab',
         readonlyPassword: 'readonly-secret',
+        poolMax: 10,
+      },
+      appDatabase: {
+        host: 'localhost',
+        port: 5432,
+        name: 'interview_lab',
+        appPassword: 'app-secret',
         poolMax: 10,
       },
       query: {
@@ -82,9 +90,12 @@ describe('loadEnv', () => {
     expect(() => loadEnv({ ...REQUIRED_ENV, PORT: rawPort })).toThrow(InvalidEnvError);
   });
 
-  it.each(['DB_HOST', 'DB_NAME', 'DB_READONLY_PASSWORD'])('rejects a missing %s', (variable) => {
-    expect(() => loadEnv({ ...REQUIRED_ENV, [variable]: '' })).toThrow(InvalidEnvError);
-  });
+  it.each(['DB_HOST', 'DB_NAME', 'DB_READONLY_PASSWORD', 'DB_APP_PASSWORD'])(
+    'rejects a missing %s',
+    (variable) => {
+      expect(() => loadEnv({ ...REQUIRED_ENV, [variable]: '' })).toThrow(InvalidEnvError);
+    },
+  );
 
   it.each([
     ['QUERY_MAX_ROWS', '0'],

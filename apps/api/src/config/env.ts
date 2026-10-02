@@ -55,9 +55,16 @@ export interface LlmEnv {
   explainMaxRows: number;
 }
 
+// Credentials of app_rw, the role that owns the application data (conversations).
+export interface AppDatabaseEnv extends DatabaseConnectionEnv {
+  appPassword: string;
+  poolMax: number;
+}
+
 export interface AppEnv {
   port: number;
   database: ReadonlyDatabaseEnv;
+  appDatabase: AppDatabaseEnv;
   query: QueryEnv;
   llm: LlmEnv;
 }
@@ -121,16 +128,24 @@ export function loadLlmEnv(source: NodeJS.ProcessEnv): LlmEnv {
 }
 
 export function loadEnv(source: NodeJS.ProcessEnv): AppEnv {
+  const connection = loadDatabaseConnectionEnv(source);
+  const poolMax = parseInteger(source, 'DB_POOL_MAX', {
+    defaultValue: DEFAULT_POOL_MAX,
+    min: 1,
+    max: MAX_POOL_SIZE,
+  });
+
   return {
     port: parseInteger(source, 'PORT', { defaultValue: DEFAULT_PORT, ...PORT_RANGE }),
     database: {
-      ...loadDatabaseConnectionEnv(source),
+      ...connection,
       readonlyPassword: requireValue(source, 'DB_READONLY_PASSWORD'),
-      poolMax: parseInteger(source, 'DB_POOL_MAX', {
-        defaultValue: DEFAULT_POOL_MAX,
-        min: 1,
-        max: MAX_POOL_SIZE,
-      }),
+      poolMax,
+    },
+    appDatabase: {
+      ...connection,
+      appPassword: requireValue(source, 'DB_APP_PASSWORD'),
+      poolMax,
     },
     query: loadQueryEnv(source),
     llm: loadLlmEnv(source),

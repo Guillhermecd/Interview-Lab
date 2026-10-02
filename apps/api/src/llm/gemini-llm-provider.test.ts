@@ -11,9 +11,20 @@ const REQUEST: LlmJsonRequest = {
   responseSchema: { type: 'object' },
 };
 
-function providerWith(generateContent: GenerateContent): GeminiLlmProvider {
+type GenerateContentStream = GeminiClient['models']['generateContentStream'];
+type GeminiChunk = Awaited<ReturnType<GenerateContent>>;
+
+const unusedStream: GenerateContentStream = () =>
+  Promise.reject(new Error('generateContentStream was not expected'));
+const unusedGenerate: GenerateContent = () =>
+  Promise.reject(new Error('generateContent was not expected'));
+
+function providerWith(
+  generateContent: GenerateContent,
+  generateContentStream: GenerateContentStream = unusedStream,
+): GeminiLlmProvider {
   return new GeminiLlmProvider(
-    { models: { generateContent } },
+    { models: { generateContent, generateContentStream } },
     { model: 'test-model', timeoutMs: 1234 },
   );
 }
@@ -107,5 +118,74 @@ describe('GeminiLlmProvider', () => {
 
     await expect(failure).rejects.toMatchObject({ code: 'LLM_UNAVAILABLE' });
     await expect(failure).rejects.not.toThrow(/secret/);
+  });
+});
+
+describe('GeminiLlmProvider.streamText', () => {
+  const TEXT_REQUEST = { system: 'You explain results.', prompt: 'Explain.' };
+
+  async function* chunks(items: GeminiChunk[], failure?: Error): AsyncGenerator<GeminiChunk> {
+    for (const item of items) {
+      await Promise.resolve();
+      yield item;
+    }
+    if (failure) {
+      throw failure;
+    }
+  }
+
+  async function readAll(provider: GeminiLlmProvider, signal?: AbortSignal) {
+    const received = [];
+    for await (const chunk of provider.streamText(TEXT_REQUEST, signal ? { signal } : {})) {
+      received.push(chunk);
+    }
+    return received;
+  }
+
+  it('yields the text as it arrives and the usage reported at the end', async () => {
+    const provider = providerWith(unusedGenerate, () =>
+      Promise.resolve(
+        chunks([
+          { text: 'O Sul ' },
+          { text: 'lidera.', usageMetadata: { promptTokenCount: 90, candidatesTokenCount: 12 } },
+        ]),
+      ),
+    );
+
+    await expect(readAll(provider)).resolves.toEqual([
+      { text: 'O Sul ' },
+      { text: 'lidera.', usage: { inputTokens: 90, outputTokens: 12 } },
+    ]);
+  });
+
+  it('asks for plain text, without a JSON schema, and passes the abort signal', async () => {
+    const sent: GeminiRequest[] = [];
+    const abort = new AbortController();
+    const provider = providerWith(unusedGenerate, (request) => {
+      sent.push(request);
+      return Promise.resolve(chunks([{ text: 'ok' }]));
+    });
+
+    await readAll(provider, abort.signal);
+
+    expect(sent[0]?.config.abortSignal).toBe(abort.signal);
+    expect(sent[0]?.config).not.toHaveProperty('responseMimeType');
+    expect(sent[0]?.config).not.toHaveProperty('responseJsonSchema');
+  });
+
+  it('reports a failure in the middle of the stream as unavailable', async () => {
+    const provider = providerWith(unusedGenerate, () =>
+      Promise.resolve(chunks([{ text: 'O Sul ' }], httpError(503))),
+    );
+
+    await expect(readAll(provider)).rejects.toMatchObject({ code: 'LLM_UNAVAILABLE' });
+  });
+
+  it('reports a failure after an abort as cancelled', async () => {
+    const abort = new AbortController();
+    abort.abort();
+    const provider = providerWith(unusedGenerate, () => Promise.reject(new Error('aborted')));
+
+    await expect(readAll(provider, abort.signal)).rejects.toMatchObject({ code: 'LLM_CANCELLED' });
   });
 });
