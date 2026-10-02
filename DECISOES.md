@@ -164,3 +164,11 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Escolha:** schemas `sales` (dados expostos) e `app` (aplicação) no mesmo banco; histórico de migrations no schema `migrations`
 - **Data:** 2026-10-02
 - **Motivo:** um único conjunto de migrations e um único serviço; o acesso ao catálogo será bloqueado pela guarda SQL na Fase 03.
+
+### D-21 — Funções de large object
+- **Contexto:** `app_readonly` conseguia executar `SELECT lo_create(0)` após desligar o read-only da sessão, gravando no banco sem privilégio em nenhuma tabela.
+- **Opções:** revogar `EXECUTE` das funções `lo_*` de `PUBLIC` no banco | deixar apenas para a guarda SQL (Fase 03)
+- **Status:** DECIDIDA
+- **Escolha:** revogar no banco, por migration, com teste; a guarda SQL continua bloqueando `lo_*` como segunda camada
+- **Data:** 2026-10-02
+- **Motivo:** defesa em camadas — a brecha é fechada na fronteira real (o banco), sem depender da guarda.

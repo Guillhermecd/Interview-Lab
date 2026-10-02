@@ -6,6 +6,7 @@
 - **Migrations em SQL puro** (`apps/api/db/migrations`), com `up` e `down`:
   - `1790899200000_create-roles-and-schemas.sql`: roles `app_readonly` e `app_rw`, schemas `sales` e `app`, revogação dos privilégios de `PUBLIC`, padrões de sessão da role read-only.
   - `1790899200001_create-sales-tables.sql`: `regions`, `products`, `customers`, `orders`, `order_items`, índices e `GRANT SELECT` tabela por tabela para `app_readonly`.
+  - `1790899200002_revoke-large-object-functions.sql`: remove de `PUBLIC` o `EXECUTE` das funções de large object (D-21).
 - **Seed** (`apps/api/db/seed.sql`): 5 regiões, 40 produtos, 500 clientes, 20.000 pedidos em 24 meses, de 1 a 4 itens por pedido. Idempotente e com datas relativas a `now()`.
 - **Código** (`apps/api/src/database`):
   - `migrate.ts` — executa as migrations pelo `node-pg-migrate`; histórico no schema `migrations`.
@@ -13,7 +14,7 @@
   - `seed.ts`, `database-env.ts` (validação das variáveis `DB_*`), `roles.ts`, `cli.ts`.
 - **Scripts:** `db:setup`, `db:migrate`, `db:migrate:down`, `db:provision`, `db:seed`.
 - **`.env.example` e `docker-compose.yml`:** variáveis renomeadas de `POSTGRES_*` para `DB_*`, usadas tanto pelo compose quanto pela API.
-- **Testes:** 36 de integração e 9 unitários novos (validação das variáveis `DB_*`) (detalhe em §3). O teste de fumaça `test/postgres.integration.test.ts` da Fase 00 foi removido: a checagem de versão do PostgreSQL passou para `migrations.integration.test.ts`.
+- **Testes:** 39 de integração e 9 unitários novos (validação das variáveis `DB_*`) (detalhe em §3). O teste de fumaça `test/postgres.integration.test.ts` da Fase 00 foi removido: a checagem de versão do PostgreSQL passou para `migrations.integration.test.ts`.
 - **Documentação:** D-20 e exceção da D-12 em `DECISOES.md`; seção "Banco de dados" e comandos `db:*` no `README.md`; Fase 01 marcada `CONCLUÍDA` no `PLANO.md` (vale com o merge).
 
 ## 2. Por que foi feito assim
@@ -43,11 +44,12 @@ Executado com `pnpm verify` em Windows 11, Node 24.15, pnpm 12.8.1, Docker 29.1.
 | Lint | ✅ | ESLint sem erros; Prettier sem diferenças |
 | Typecheck | ✅ | `shared`, `api`, `web` |
 | Testes unitários | ✅ | 20 passaram / 20 total (API 19, web 1) |
-| Testes de integração | ✅ | 36 passaram / 36 total |
+| Testes de integração | ✅ | 39 passaram / 39 total |
 | Build | ✅ | `shared`, `api`, `web` |
 
 O que os testes de integração provam (PostgreSQL 17 real, via Testcontainers):
 - **Critério do `PLANO.md` — DDL/DML falham.** `INSERT`, `UPDATE`, `DELETE`, `TRUNCATE`, `DROP TABLE`, `ALTER TABLE`, `CREATE TABLE` (em `sales` e em `public`), `CREATE TEMP TABLE`, `CREATE SCHEMA` e `CREATE ROLE` são negados com erro `42501` (privilégio insuficiente) **depois de a sessão executar `SET default_transaction_read_only = off`**. Ou seja: falham por privilégio, não pelo padrão de sessão.
+- **Large objects (D-21):** `lo_create`, `lo_from_bytea` e `lo_get` também são negados com `42501`, nas mesmas condições.
 - **Padrão read-only ativo:** sem mexer na sessão, `INSERT` falha com `25006` (transação somente leitura).
 - **Critério do `PLANO.md` — query longa cancelada.** `SELECT pg_sleep(30)` é cancelado com `57014` entre 5s e 8s.
 - **Isolamento:** `app_readonly` recebe `42501` ao ler `app.secrets` e `migrations.pgmigrations`; `app_rw` recebe `42501` ao ler `sales` e ao criar tabela em `app`.
@@ -64,15 +66,17 @@ Verificações adicionais:
 - Nenhum outro.
 
 ## 5. Decisões que preciso que você tome
-1. **Push e abertura do PR da Fase 01.** Nada foi enviado.
-2. **Bloquear funções de large object no banco?** Verifiquei que `app_readonly` consegue executar `SELECT lo_create(0)` depois de desligar o read-only da sessão: cria um large object, ou seja, grava no banco sem ter privilégio em nenhuma tabela.
-   - **Opção A (recomendada):** nova migration com `REVOKE EXECUTE` das funções `lo_*` de `PUBLIC`, mais teste. Fecha a brecha na camada do banco. Custo: nenhuma role comum usa large objects neste banco (o projeto não usa).
-   - **Opção B:** deixar para a guarda SQL (Fase 03), que já prevê bloquear `lo_*`. Custo: até lá, e se a guarda falhar, a brecha existe.
-   - Posso incluir a opção A neste mesmo PR ou em um PR separado.
-3. **D-03 não bloqueia a Fase 02**, que não depende de decisão pendente. Só registro que D-03 (provedor de LLM) será necessária na Fase 04.
+Respondidas em 2026-10-02:
+1. **Push e abertura do PR da Fase 01** — autorizado.
+2. **Funções de large object (D-21)** — a primeira versão desta fase deixava `app_readonly` executar `SELECT lo_create(0)` depois de desligar o read-only da sessão, gravando no banco sem privilégio em nenhuma tabela. Decisão: revogar no banco. Feito na migration `1790899200002_revoke-large-object-functions.sql`, com testes.
+
+Pendente, ação manual sua:
+- **Merge do PR da Fase 01** (squash), com o CI verde.
+
+A Fase 02 não depende de decisão pendente. D-03 (provedor de LLM) será necessária na Fase 04.
 
 ## 6. Dívida técnica / pontos de atenção
-- **A role sozinha não torna o banco "somente leitura".** Uma sessão consegue: desligar `default_transaction_read_only`; zerar o `statement_timeout` (`SET` ou `set_config`); criar large objects (item 2 acima). Tabelas e estrutura continuam protegidas por privilégio. É exatamente por isso que a Fase 02 adiciona timeout na aplicação e a Fase 03 a guarda SQL (um único `SELECT`, sem `SET`, sem funções perigosas).
+- **A role sozinha não torna o banco "somente leitura".** Uma sessão consegue: desligar `default_transaction_read_only`; zerar o `statement_timeout` (`SET` ou `set_config`). Tabelas, estrutura e large objects continuam protegidos por privilégio. É exatamente por isso que a Fase 02 adiciona timeout na aplicação e a Fase 03 a guarda SQL (um único `SELECT`, sem `SET`, sem funções perigosas).
 - **Catálogo do Postgres visível.** `app_readonly` lê `pg_class` e `pg_roles`: enxerga nomes de tabelas de `app` e nomes de roles, não dados nem hashes de senha (`pg_authid` é negado). Consequência conhecida da D-20; a allowlist de tabelas da Fase 03 cobre.
 - **Funções executáveis por `PUBLIC`** (`pg_sleep` e outras) continuam disponíveis; bloqueio previsto na guarda SQL.
 - **`db:provision` envia a senha em um `ALTER ROLE`**; se o servidor registrar statements em log (`log_statement`), a senha aparece no log do banco. Padrão do Postgres local não registra. Rever no deploy (Fase 09).
