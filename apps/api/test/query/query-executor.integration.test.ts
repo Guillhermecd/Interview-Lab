@@ -86,6 +86,18 @@ describe('QueryExecutor', () => {
       expect(result.rows[0]?.[2]).toBeInstanceOf(Date);
     });
 
+    it('returns date and timestamp without time zone as written by PostgreSQL', async () => {
+      const result = await executorWith().execute(
+        "SELECT date '2026-09-02' AS dia, timestamp '2026-09-02 14:30:00' AS momento",
+      );
+
+      expect(result.columns).toEqual([
+        { name: 'dia', type: 'date' },
+        { name: 'momento', type: 'timestamp' },
+      ]);
+      expect(result.rows).toEqual([['2026-09-02', '2026-09-02 14:30:00']]);
+    });
+
     it('keeps columns that share the same name', async () => {
       const result = await executorWith().execute(
         'SELECT regions.id, customers.id FROM regions JOIN customers ON customers.region_id = regions.id LIMIT 1',
