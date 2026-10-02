@@ -1,14 +1,14 @@
-import type { QueryResult } from '@interview-lab/shared';
+import type { AskResponse, QueryResult } from '@interview-lab/shared';
 import { describe, expect, it } from 'vitest';
 import {
-  explanationAnswer,
   refusalAnswer,
   ScriptedLlmProvider,
   sqlAnswer,
 } from '../../test/support/scripted-llm-provider.js';
+import { LlmError } from '../llm/llm-error.js';
 import { QueryExecutionError } from '../query/query-error.js';
 import type { SchemaDescription } from '../query/schema-catalog.service.js';
-import { AskService } from './ask.service.js';
+import { AskService, type AskEvent } from './ask.service.js';
 
 const SCHEMA: SchemaDescription = {
   tables: [
@@ -38,14 +38,16 @@ const QUESTION = 'Quantos pedidos por região?';
 
 type RunOutcome = QueryResult | Error;
 
-// Answers each run() with the next outcome and records the SQL it received.
+// Answers each run() with the next outcome and records what it received.
 class FakeQueries {
   readonly executed: string[] = [];
+  readonly signals: (AbortSignal | undefined)[] = [];
 
   constructor(private readonly outcomes: RunOutcome[]) {}
 
-  run(sql: string): Promise<QueryResult> {
+  run(sql: string, signal?: AbortSignal): Promise<QueryResult> {
     this.executed.push(sql);
+    this.signals.push(signal);
     const outcome = this.outcomes.shift();
     if (outcome === undefined) {
       return Promise.reject(new Error('FakeQueries has no outcome left'));
@@ -54,14 +56,27 @@ class FakeQueries {
   }
 }
 
-function setup(answers: unknown[], outcomes: RunOutcome[]) {
-  const provider = new ScriptedLlmProvider(answers);
+function setup(jsonAnswers: unknown[], texts: (string | Error)[], outcomes: RunOutcome[]) {
+  const provider = new ScriptedLlmProvider(jsonAnswers, texts);
   const queries = new FakeQueries(outcomes);
   const service = new AskService(provider, { describe: () => Promise.resolve(SCHEMA) }, queries, {
     maxRows: 1000,
     explainMaxRows: 50,
   });
   return { provider, queries, service };
+}
+
+async function collect(
+  stream: AsyncGenerator<AskEvent, AskResponse>,
+): Promise<{ events: AskEvent[]; answer: AskResponse }> {
+  const events: AskEvent[] = [];
+  for (;;) {
+    const step = await stream.next();
+    if (step.done === true) {
+      return { events, answer: step.value };
+    }
+    events.push(step.value);
+  }
 }
 
 function rejected(message: string): QueryExecutionError {
@@ -71,10 +86,8 @@ function rejected(message: string): QueryExecutionError {
 describe('AskService', () => {
   it('generates SQL, executes it and explains the result', async () => {
     const { service, queries } = setup(
-      [
-        sqlAnswer('SELECT regiao, pedidos FROM x'),
-        explanationAnswer('O Sul tem mais pedidos.', 'bar', 'regiao', 'pedidos'),
-      ],
+      [sqlAnswer('SELECT regiao, pedidos FROM x', 'bar', 'regiao', 'pedidos')],
+      ['O Sul tem mais pedidos.'],
       [RESULT],
     );
 
@@ -91,11 +104,30 @@ describe('AskService', () => {
     expect(queries.executed).toEqual(['SELECT regiao, pedidos FROM x']);
   });
 
-  it('gives the schema and the question to the LLM', async () => {
-    const { service, provider } = setup(
-      [sqlAnswer('SELECT 1'), explanationAnswer('Ok.')],
+  it('emits sql, then rows, then the explanation token by token', async () => {
+    const { service } = setup(
+      [sqlAnswer('SELECT 1', 'bar', 'regiao', 'pedidos')],
+      ['O Sul lidera.'],
       [RESULT],
     );
+
+    const { events } = await collect(service.stream({ question: QUESTION }));
+
+    expect(events).toEqual([
+      { type: 'sql', sql: 'SELECT 1', attempt: 1 },
+      {
+        type: 'rows',
+        result: RESULT,
+        visualization: { type: 'bar', xColumn: 'regiao', yColumn: 'pedidos' },
+      },
+      { type: 'token', text: 'O ' },
+      { type: 'token', text: 'Sul ' },
+      { type: 'token', text: 'lidera.' },
+    ]);
+  });
+
+  it('gives the schema and the question to the LLM', async () => {
+    const { service, provider } = setup([sqlAnswer('SELECT 1')], ['Ok.'], [RESULT]);
 
     await service.ask(QUESTION);
 
@@ -103,15 +135,35 @@ describe('AskService', () => {
     expect(provider.requests[0]?.prompt).toContain(QUESTION);
   });
 
-  it('gives the question, the SQL and the rows to the LLM for the explanation', async () => {
-    const { service, provider } = setup(
-      [sqlAnswer('SELECT 1'), explanationAnswer('Ok.')],
-      [RESULT],
+  it('gives the conversation history to the LLM when there is one', async () => {
+    const { service, provider } = setup([sqlAnswer('SELECT 1')], ['Ok.'], [RESULT]);
+
+    await collect(
+      service.stream({
+        question: 'E por produto?',
+        context: {
+          summary: 'O usuário analisa vendas de 2026.',
+          recent: [
+            { role: 'user', content: 'Faturamento por região?' },
+            { role: 'assistant', content: 'O Sul lidera.', sql: 'SELECT regiao FROM x' },
+          ],
+        },
+      }),
     );
+
+    const prompt = provider.requests[0]?.prompt;
+    expect(prompt).toContain('summary of earlier messages: O usuário analisa vendas de 2026.');
+    expect(prompt).toContain('user: Faturamento por região?');
+    expect(prompt).toContain('sql: SELECT regiao FROM x');
+    expect(prompt).toContain('<question>\nE por produto?\n</question>');
+  });
+
+  it('gives the question, the SQL and the rows to the LLM for the explanation', async () => {
+    const { service, provider } = setup([sqlAnswer('SELECT 1')], ['Ok.'], [RESULT]);
 
     await service.ask(QUESTION);
 
-    const explanationPrompt = provider.requests[1]?.prompt;
+    const explanationPrompt = provider.textRequests[0]?.prompt;
     expect(explanationPrompt).toContain(QUESTION);
     expect(explanationPrompt).toContain('SELECT 1');
     expect(explanationPrompt).toContain('"Sul"');
@@ -120,22 +172,23 @@ describe('AskService', () => {
   describe('when the first SQL is refused', () => {
     it('asks for a new SQL once, telling the LLM why, and answers with the second', async () => {
       const { service, provider, queries } = setup(
-        [
-          sqlAnswer('SELECT * FROM invoices'),
-          sqlAnswer('SELECT * FROM orders'),
-          explanationAnswer('Ok.'),
-        ],
+        [sqlAnswer('SELECT * FROM invoices'), sqlAnswer('SELECT * FROM orders')],
+        ['Ok.'],
         [rejected('A tabela "invoices" não está disponível.'), RESULT],
       );
 
-      const response = await service.ask(QUESTION);
+      const { events, answer } = await collect(service.stream({ question: QUESTION }));
 
-      expect(response).toMatchObject({
+      expect(answer).toMatchObject({
         status: 'answered',
         sql: 'SELECT * FROM orders',
         attempts: 2,
         usage: { calls: 3, inputTokens: 300, outputTokens: 60 },
       });
+      expect(events.filter((event) => event.type === 'sql')).toEqual([
+        { type: 'sql', sql: 'SELECT * FROM invoices', attempt: 1 },
+        { type: 'sql', sql: 'SELECT * FROM orders', attempt: 2 },
+      ]);
       expect(queries.executed).toEqual(['SELECT * FROM invoices', 'SELECT * FROM orders']);
       expect(provider.requests[1]?.prompt).toContain('SELECT * FROM invoices');
       expect(provider.requests[1]?.prompt).toContain('A tabela "invoices" não está disponível.');
@@ -149,7 +202,8 @@ describe('AskService', () => {
       'QUERY_DATA_ERROR',
     ] as const)('retries after %s', async (code) => {
       const { service } = setup(
-        [sqlAnswer('SELECT bad'), sqlAnswer('SELECT good'), explanationAnswer('Ok.')],
+        [sqlAnswer('SELECT bad'), sqlAnswer('SELECT good')],
+        ['Ok.'],
         [new QueryExecutionError(code), RESULT],
       );
 
@@ -159,6 +213,7 @@ describe('AskService', () => {
     it('gives up after the second refusal, without a third attempt', async () => {
       const { service, provider, queries } = setup(
         [sqlAnswer('SELECT bad'), sqlAnswer('SELECT still bad'), sqlAnswer('SELECT never asked')],
+        [],
         [rejected('first'), rejected('second'), RESULT],
       );
 
@@ -171,11 +226,12 @@ describe('AskService', () => {
     });
   });
 
-  it.each(['QUERY_TIMEOUT', 'DATABASE_UNAVAILABLE', 'QUERY_FAILED'] as const)(
+  it.each(['QUERY_TIMEOUT', 'QUERY_CANCELLED', 'DATABASE_UNAVAILABLE', 'QUERY_FAILED'] as const)(
     'does not retry after %s',
     async (code) => {
       const { service, provider } = setup(
         [sqlAnswer('SELECT 1'), sqlAnswer('SELECT never asked')],
+        [],
         [new QueryExecutionError(code), RESULT],
       );
 
@@ -185,38 +241,85 @@ describe('AskService', () => {
   );
 
   it('does not run anything when the LLM says the question cannot be answered', async () => {
-    const { service, queries } = setup([refusalAnswer('Não há dados de estoque.')], []);
+    const { service, queries } = setup([refusalAnswer('Não há dados de estoque.')], [], []);
 
-    await expect(service.ask(QUESTION)).resolves.toEqual({
+    const { events, answer } = await collect(service.stream({ question: QUESTION }));
+
+    expect(answer).toEqual({
       status: 'not_answerable',
       question: QUESTION,
       reason: 'Não há dados de estoque.',
       usage: { inputTokens: 100, outputTokens: 20, calls: 1 },
     });
+    expect(events).toEqual([{ type: 'token', text: 'Não há dados de estoque.' }]);
     expect(queries.executed).toEqual([]);
   });
 
   it('fails when the LLM returns neither SQL nor a reason', async () => {
-    const { service, queries } = setup([{ sql: '', cannotAnswerReason: '' }], []);
+    const { service, queries } = setup([{ sql: '', cannotAnswerReason: '' }], [], []);
 
     await expect(service.ask(QUESTION)).rejects.toMatchObject({ code: 'LLM_INVALID_RESPONSE' });
     expect(queries.executed).toEqual([]);
   });
 
-  it('fails when the explanation is unusable', async () => {
-    const { service } = setup([sqlAnswer('SELECT 1'), { explanation: '' }], [RESULT]);
+  it('fails when the explanation is empty', async () => {
+    const { service } = setup([sqlAnswer('SELECT 1')], ['   '], [RESULT]);
 
     await expect(service.ask(QUESTION)).rejects.toMatchObject({ code: 'LLM_INVALID_RESPONSE' });
   });
 
+  it('fails when the provider breaks in the middle of the explanation', async () => {
+    const { service } = setup([sqlAnswer('SELECT 1')], [new LlmError('LLM_UNAVAILABLE')], [RESULT]);
+
+    await expect(service.ask(QUESTION)).rejects.toMatchObject({ code: 'LLM_UNAVAILABLE' });
+  });
+
+  it('cuts an explanation that grows beyond the limit', async () => {
+    const { service } = setup([sqlAnswer('SELECT 1')], ['palavra '.repeat(1000)], [RESULT]);
+
+    const answer = await service.ask(QUESTION);
+
+    expect(answer.status === 'answered' && answer.explanation.length).toBeLessThanOrEqual(2000);
+  });
+
   it('downgrades an invalid chart suggestion to a table', async () => {
     const { service } = setup(
-      [sqlAnswer('SELECT 1'), explanationAnswer('Ok.', 'bar', 'coluna_inexistente', 'pedidos')],
+      [sqlAnswer('SELECT 1', 'bar', 'coluna_inexistente', 'pedidos')],
+      ['Ok.'],
       [RESULT],
     );
 
     await expect(service.ask(QUESTION)).resolves.toMatchObject({
       visualization: { type: 'table' },
     });
+  });
+
+  it('passes the abort signal on to the query', async () => {
+    const { service, queries } = setup([sqlAnswer('SELECT 1')], ['Ok.'], [RESULT]);
+    const abort = new AbortController();
+
+    await collect(service.stream({ question: QUESTION }, abort.signal));
+
+    expect(queries.signals).toEqual([abort.signal]);
+  });
+
+  it('stops streaming the explanation when aborted', async () => {
+    const { service, provider } = setup([sqlAnswer('SELECT 1')], ['um dois três'], [RESULT]);
+    const abort = new AbortController();
+    const stream = service.stream({ question: QUESTION }, abort.signal);
+
+    const seen: AskEvent[] = [];
+    const drain = (async () => {
+      for await (const event of stream) {
+        seen.push(event);
+        if (event.type === 'token') {
+          abort.abort();
+        }
+      }
+    })();
+
+    await expect(drain).rejects.toMatchObject({ code: 'LLM_CANCELLED' });
+    expect(seen.filter((event) => event.type === 'token')).toHaveLength(1);
+    expect(provider.streamAborted).toBe(true);
   });
 });

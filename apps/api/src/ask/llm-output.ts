@@ -6,15 +6,20 @@ import {
 } from '@interview-lab/shared';
 import { LlmError } from '../llm/llm-error.js';
 
-const MAX_EXPLANATION_LENGTH = 2000;
+export const MAX_EXPLANATION_LENGTH = 2000;
 const MAX_REASON_LENGTH = 500;
+const MAX_SUMMARY_LENGTH = 2000;
 
-export type SqlGeneration = { kind: 'sql'; sql: string } | { kind: 'refusal'; reason: string };
-
-export interface Explanation {
-  explanation: string;
-  visualization: VisualizationSuggestion;
+// What the LLM proposed, before it is checked against the real result.
+export interface ProposedVisualization {
+  type: string;
+  xColumn: string;
+  yColumn: string;
 }
+
+export type SqlGeneration =
+  | { kind: 'sql'; sql: string; visualization: ProposedVisualization }
+  | { kind: 'refusal'; reason: string };
 
 type JsonObject = Record<string, unknown>;
 
@@ -40,7 +45,15 @@ export function parseSqlGeneration(data: unknown): SqlGeneration {
   const object = asObject(data);
   const sql = readText(object, 'sql');
   if (sql !== '') {
-    return { kind: 'sql', sql };
+    return {
+      kind: 'sql',
+      sql,
+      visualization: {
+        type: readText(object, 'visualization'),
+        xColumn: readText(object, 'xColumn'),
+        yColumn: readText(object, 'yColumn'),
+      },
+    };
   }
 
   const reason = readText(object, 'cannotAnswerReason');
@@ -50,12 +63,13 @@ export function parseSqlGeneration(data: unknown): SqlGeneration {
   return { kind: 'refusal', reason: reason.slice(0, MAX_REASON_LENGTH) };
 }
 
-// A chart only makes sense with two columns that exist in the result;
-// otherwise the suggestion falls back to a table.
-function readVisualization(object: JsonObject, columns: QueryColumn[]): VisualizationSuggestion {
-  const type = readText(object, 'visualization');
-  const xColumn = readText(object, 'xColumn');
-  const yColumn = readText(object, 'yColumn');
+// A chart only makes sense with two different columns that exist in the
+// result; otherwise the suggestion falls back to a table.
+export function resolveVisualization(
+  proposed: ProposedVisualization,
+  columns: QueryColumn[],
+): VisualizationSuggestion {
+  const { type, xColumn, yColumn } = proposed;
   const columnNames = new Set(columns.map((column) => column.name));
 
   if (
@@ -70,15 +84,10 @@ function readVisualization(object: JsonObject, columns: QueryColumn[]): Visualiz
   return { type, xColumn, yColumn };
 }
 
-export function parseExplanation(data: unknown, columns: QueryColumn[]): Explanation {
-  const object = asObject(data);
-  const explanation = readText(object, 'explanation');
-  if (explanation === '') {
+export function parseSummary(data: unknown): string {
+  const summary = readText(asObject(data), 'summary');
+  if (summary === '') {
     throw new LlmError('LLM_INVALID_RESPONSE');
   }
-
-  return {
-    explanation: explanation.slice(0, MAX_EXPLANATION_LENGTH),
-    visualization: readVisualization(object, columns),
-  };
+  return summary.slice(0, MAX_SUMMARY_LENGTH);
 }
