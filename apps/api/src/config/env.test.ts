@@ -27,7 +27,7 @@ describe('loadEnv', () => {
       },
       llm: {
         geminiApiKey: undefined,
-        model: 'gemini-3.8-flash',
+        model: 'gemini-3.5-flash-lite',
         timeoutMs: 30_000,
         explainMaxRows: 50,
       },
@@ -38,14 +38,14 @@ describe('loadEnv', () => {
     const env = loadEnv({
       ...REQUIRED_ENV,
       GEMINI_API_KEY: 'test-key',
-      LLM_MODEL: 'gemini-3.5-flash-lite',
+      LLM_MODEL: 'gemini-3.8-flash',
       LLM_TIMEOUT_MS: '10000',
       LLM_EXPLAIN_MAX_ROWS: '20',
     });
 
     expect(env.llm).toEqual({
       geminiApiKey: 'test-key',
-      model: 'gemini-3.5-flash-lite',
+      model: 'gemini-3.8-flash',
       timeoutMs: 10_000,
       explainMaxRows: 20,
     });
