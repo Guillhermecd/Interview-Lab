@@ -104,7 +104,8 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Exceção registrada:** o commit inicial (somente documentação) foi feito direto na `main`, porque o repositório remoto estava vazio.
 - **Exceção registrada:** o squash merge do PR #1 (Fase 00) foi executado pelo Claude a pedido explícito do Guilherme, com o CI verde.
 - **Exceção registrada:** o squash merge do PR #2 (Fase 01) foi executado pelo Claude, com o CI verde, interpretando "siga adiante" como autorização; não houve pedido explícito de merge.
-- **Regra a partir de 2026-10-02 (Fase 02 em diante):** o Claude faz push, abre o PR e executa o squash merge quando o CI estiver verde. Se o CI não ficar verde, o Claude explica o motivo ao Guilherme antes de qualquer outra ação. Isto substitui "merge feito pelo Guilherme" da proposta original.
+- **Regra a partir de 2026-10-02 (Fase 02 em diante):** o Claude executa o squash merge quando o CI estiver verde. Se o CI não ficar verde, o Claude explica o motivo ao Guilherme antes de qualquer outra ação. Isto substitui "merge feito pelo Guilherme" da proposta original. Push e abertura do PR continuam exigindo aprovação a cada fase, depois do relatório.
+- **Regra a partir de 2026-10-02 (Fase 03 em diante):** push e abertura do PR também passam a ser feitos pelo Claude ao fim de cada fase, sem pergunta; o Guilherme revisa pelo relatório no PR. Decisões pendentes da fase seguinte continuam sendo perguntadas antes de começar.
 
 ### D-13 — Precedência entre `PLANO.md` e os documentos de padrões em `template/`
 - **Contexto:** os documentos de padrões descrevem outra stack (Sails.js/Spring Boot, Ant Design, pastas `backend/` e `frontend/`, npm, porta 1337, fluxo com `develop`), o que contradiz o `PLANO.md`.
@@ -182,3 +183,29 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Escolha:** `POST /api/internal/queries/execute` só é registrado com `INTERNAL_QUERY_ENDPOINT_ENABLED=true`; o padrão é `false`
 - **Data:** 2026-10-02
 - **Motivo:** cumpre a entrega do `PLANO.md` e permite testar por HTTP sem expor SQL cru por padrão. A partir da Fase 03 a guarda SQL entra na frente do executor.
+
+### D-23 — Parâmetros da guarda SQL
+- **Opções:** funções por allowlist | por blocklist; `LIMIT` 1000 | injeta 100 com teto 1000 | 200; máximo de `JOIN`s 5 | 3 | 8
+- **Status:** DECIDIDA
+- **Escolha:** funções por **allowlist**; `LIMIT` de **1000** (o mesmo `QUERY_MAX_ROWS` do executor), injetado quando ausente e reduzido quando maior; no máximo **5 JOINs**
+- **Data:** 2026-10-02
+- **Motivo:** allowlist bloqueia por padrão qualquer função perigosa não prevista; um único número de limite no sistema; 5 JOINs cobrem a consulta mais larga do schema de vendas (4 JOINs) com folga.
+- **Definição de JOIN:** conta-se na query inteira (subqueries, CTEs e ramos de `UNION` somados) cada `JOIN` explícito mais cada item separado por vírgula no `FROM` além do primeiro.
+- **Detalhe do `LIMIT`:** a guarda injeta `QUERY_MAX_ROWS + 1`, para o executor ainda conseguir distinguir "exatamente 1000 linhas" de "havia mais" (`truncated`). O usuário nunca recebe mais de 1000.
+
+### D-24 — Versão do parser SQL
+- **Contexto:** a versão instalada na Fase 00 (`libpg-query` 18) usa a gramática do PostgreSQL 18, mas o banco é PostgreSQL 17 (D-18).
+- **Opções:** fixar `libpg-query` em 17.x | subir o banco para 18 | manter a divergência
+- **Status:** DECIDIDA
+- **Escolha:** `libpg-query` fixado em `17.7.4` (versão exata)
+- **Data:** 2026-10-02
+- **Motivo:** a D-04 escolheu este parser por aceitar exatamente o que o banco aceita; parser e servidor precisam ter a mesma gramática. Ao atualizar o PostgreSQL, atualizar o parser junto.
+
+### D-25 — Reescrita do `LIMIT` sem deparser
+- **Contexto:** o `libpg-query` não transforma a AST de volta em SQL.
+- **Opções:** manter o texto original e acrescentar/embrulhar o `LIMIT` | adicionar a biblioteca `pgsql-deparser`
+- **Status:** DECIDIDA
+- **Escolha:** sem dependência nova. Sem `LIMIT`: acrescenta `LIMIT n` ao fim do statement. `LIMIT` acima do teto, `LIMIT ALL` ou `LIMIT NULL`: embrulha em `SELECT * FROM (<sql>) AS limited_query LIMIT n`. O texto final é re-parseado e re-validado antes de executar.
+- **Data:** 2026-10-02
+- **Motivo:** não coloca código de terceiros no caminho de segurança e não reformata o SQL do usuário (importante para o editor da Fase 07).
+- **Ponto de atenção:** no caso embrulhado, a preservação do `ORDER BY` interno não é garantida pelo padrão SQL; o PostgreSQL 17 preserva e há teste de integração cobrindo.

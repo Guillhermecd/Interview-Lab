@@ -1,7 +1,7 @@
 import { Body, Controller, HttpCode, HttpStatus, Inject, Post } from '@nestjs/common';
 import type { QueryResult } from '@interview-lab/shared';
 import { ValidationError } from '../http/validation-error.js';
-import { QueryExecutor } from './query-executor.service.js';
+import { GuardedQueryService } from './guarded-query.service.js';
 
 const MAX_SQL_LENGTH = 10_000;
 
@@ -22,15 +22,16 @@ function readSql(body: unknown): string {
   return sql;
 }
 
-// Internal endpoint: it runs SQL without the SQL guard, which only exists from
-// Phase 03 on. It is registered only when INTERNAL_QUERY_ENDPOINT_ENABLED=true.
+// Internal endpoint: the SQL goes through the guard, but there is no
+// authentication or rate limit yet (Phase 08). It is registered only when
+// INTERNAL_QUERY_ENDPOINT_ENABLED=true.
 @Controller('internal/queries')
 export class QueryController {
-  constructor(@Inject(QueryExecutor) private readonly executor: QueryExecutor) {}
+  constructor(@Inject(GuardedQueryService) private readonly queries: GuardedQueryService) {}
 
   @Post('execute')
   @HttpCode(HttpStatus.OK)
   execute(@Body() body: unknown): Promise<QueryResult> {
-    return this.executor.execute(readSql(body));
+    return this.queries.run(readSql(body));
   }
 }
