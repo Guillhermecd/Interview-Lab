@@ -1,0 +1,27 @@
+# Dependências
+node_modules/
+
+# Build e cobertura
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Variáveis de ambiente
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# Editor / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Documentação interna de terceiros — mantida apenas localmente (ver D-15)
+template/README.md
+template/CONTRIBUTING.md
+template/docs/
