@@ -1,0 +1,29 @@
+{
+  "name": "interview-lab",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.8.1",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build:shared": "pnpm --filter @interview-lab/shared build",
+    "lint": "pnpm build:shared && eslint . && prettier --check .",
+    "format": "prettier --write .",
+    "typecheck": "pnpm build:shared && pnpm -r typecheck",
+    "test": "pnpm build:shared && pnpm -r test",
+    "test:integration": "pnpm build:shared && pnpm -r test:integration",
+    "build": "pnpm -r build",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm test:integration && pnpm build"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.11.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.9",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.71.0"
+  }
+}

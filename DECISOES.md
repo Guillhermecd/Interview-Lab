@@ -41,14 +41,20 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
   o que importa para segurança; os outros são JS puro, mais fáceis de instalar, mas podem divergir do
   Postgres em sintaxe rara (e divergência é por onde passa um ataque).
 - **Recomendação:** `libpg-query`. Validar instalação no CI na Fase 00.
-- **Status:** PENDENTE
+- **Status:** DECIDIDA
+- **Escolha:** `libpg-query`, com teste de fumaça de instalação já na Fase 00
+- **Data:** 2026-10-02
+- **Motivo:** aceita exatamente o que o Postgres aceita; validar cedo evita descobrir problema de instalação só na Fase 03.
 
 ### D-05 — Dataset de demonstração
 - **Opções:** schema próprio de vendas (regiões, produtos, pedidos) | dataset público (ex.: Pagila, Northwind)
 - **Trade-off:** dataset público é pronto e conhecido; schema próprio controla volume e permite
   perguntas como "faturamento por região no último trimestre" com datas atuais.
 - **Recomendação:** schema próprio com seed gerado.
-- **Status:** PENDENTE
+- **Status:** DECIDIDA
+- **Escolha:** schema próprio de vendas (regiões, produtos, pedidos) com seed gerado
+- **Data:** 2026-10-02
+- **Motivo:** controle de volume e datas atuais para perguntas como "faturamento por região no último trimestre".
 
 ### D-06 — Biblioteca de gráficos
 - **Opções:** Recharts | Chart.js | ECharts
@@ -80,7 +86,10 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Opção A:** ordem do `PLANO.md` (segurança primeiro, frontend na Fase 06).
 - **Opção B:** frontend mínimo mais cedo para ver o produto funcionando antes.
 - **Recomendação:** A — a guarda SQL é o coração do projeto e precisa existir antes de qualquer SQL gerado por IA tocar o banco.
-- **Status:** PENDENTE
+- **Status:** DECIDIDA
+- **Escolha:** A — ordem do `PLANO.md`, da Fase 00 à Fase 09
+- **Data:** 2026-10-02
+- **Motivo:** segurança antes de qualquer SQL gerado por IA tocar o banco.
 
 ### D-11 — Deploy
 - **Opções:** AWS Lightsail | VPS com Docker + Traefik | outro
@@ -118,3 +127,31 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Data:** 2026-10-02
 - **Motivo:** não divulgar material interno.
 - **Ponto de atenção:** um clone novo não terá esses arquivos, que o `CLAUDE.md` §1.1 manda ler.
+
+### D-16 — Lint e formatação
+- **Opções:** ESLint + Prettier | Biome
+- **Status:** DECIDIDA
+- **Escolha:** ESLint (typescript-eslint, regras type-aware) + Prettier
+- **Data:** 2026-10-02
+- **Motivo:** padrão do NestJS e do Vite, com regras type-aware mais completas.
+
+### D-17 — Versão do Node e gerenciador de pacotes
+- **Opções:** Node 24 | Node 22
+- **Status:** DECIDIDA
+- **Escolha:** Node 24 no CI e em `engines`; pnpm instalado globalmente via `npm install -g pnpm` (`corepack enable` falhou com `EPERM` sem terminal elevado)
+- **Data:** 2026-10-02
+- **Motivo:** mesma versão na máquina local e no CI.
+
+### D-18 — Versão do PostgreSQL
+- **Opções:** 17 | 16
+- **Status:** DECIDIDA
+- **Escolha:** PostgreSQL 17 (docker-compose e Testcontainers)
+- **Data:** 2026-10-02
+- **Motivo:** escolha do Guilherme.
+
+### D-19 — Driver de banco e ferramenta de migrations
+- **Opções:** driver `pg` + SQL puro versionado com `node-pg-migrate` | ORM/query builder com migrations próprias (Drizzle, Prisma, Kysely)
+- **Status:** DECIDIDA
+- **Escolha:** driver `pg` + migrations em SQL puro com `node-pg-migrate`
+- **Data:** 2026-10-02
+- **Motivo:** roles, `GRANT` e parâmetros da role read-only ficam explícitos no SQL, que é o foco de segurança da Fase 01.

@@ -1,0 +1,9 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Dependências nativas opcionais do Testcontainers (cliente SSH); não são usadas.
+allowBuilds:
+  cpu-features: false
+  protobufjs: false
+  ssh2: false
