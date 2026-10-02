@@ -102,6 +102,7 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Data:** 2026-10-02
 - **Motivo:** fluxo simples para projeto de um desenvolvedor, alinhado ao `CLAUDE.md` §3.
 - **Exceção registrada:** o commit inicial (somente documentação) foi feito direto na `main`, porque o repositório remoto estava vazio.
+- **Exceção registrada:** o squash merge do PR #1 (Fase 00) foi executado pelo Claude a pedido explícito do Guilherme, com o CI verde.
 
 ### D-13 — Precedência entre `PLANO.md` e os documentos de padrões em `template/`
 - **Contexto:** os documentos de padrões descrevem outra stack (Sails.js/Spring Boot, Ant Design, pastas `backend/` e `frontend/`, npm, porta 1337, fluxo com `develop`), o que contradiz o `PLANO.md`.
@@ -155,3 +156,11 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Escolha:** driver `pg` + migrations em SQL puro com `node-pg-migrate`
 - **Data:** 2026-10-02
 - **Motivo:** roles, `GRANT` e parâmetros da role read-only ficam explícitos no SQL, que é o foco de segurança da Fase 01.
+
+### D-20 — Isolamento entre dados de demonstração e dados da aplicação
+- **Opções:** schema separado no mesmo banco | banco separado
+- **Trade-off:** banco separado isola mais (a role read-only nem conecta), mas exige bootstrap fora das migrations, dois conjuntos de migrations e duas conexões. Schema separado é mais simples, porém a role read-only enxerga os nomes das tabelas da aplicação pelo catálogo do Postgres (não os dados).
+- **Status:** DECIDIDA
+- **Escolha:** schemas `sales` (dados expostos) e `app` (aplicação) no mesmo banco; histórico de migrations no schema `migrations`
+- **Data:** 2026-10-02
+- **Motivo:** um único conjunto de migrations e um único serviço; o acesso ao catálogo será bloqueado pela guarda SQL na Fase 03.
