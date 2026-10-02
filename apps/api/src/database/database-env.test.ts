@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { InvalidEnvError } from '../config/env.js';
+import { InvalidEnvError } from '../config/env-parsers.js';
 import { loadDatabaseEnv } from './database-env.js';
 
 const VALID_ENV = {
