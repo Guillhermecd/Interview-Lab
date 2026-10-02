@@ -51,7 +51,9 @@ Verificações adicionais:
 - **`docker compose config`:** válido.
 - **Clone limpo (simulação do CI):** `git clone` da branch, `pnpm install --frozen-lockfile` e `pnpm verify` passaram por completo.
 
-**Não verificado:** o workflow do GitHub Actions ainda não rodou — exige push e PR. O critério do `PLANO.md` ("CI roda e falha de propósito com um teste quebrado; passa ao corrigir") só foi demonstrado localmente.
+**CI no GitHub Actions (PR #1):**
+- Commit `a04a549` (asserção do health check quebrada de propósito): run [37010764834](https://github.com/Guillhermecd/Interview-Lab/actions/runs/37010764834) **falhou** na etapa "Unit tests" com `AssertionError: expected { status: 'ok' } to deeply equal { status: 'broken' }`; lint e typecheck passaram, integração e build foram pulados.
+- Commit seguinte (asserção restaurada): resultado registrado no próprio PR.
 
 ## 4. Erros e problemas encontrados
 - **`corepack enable` falhou** com `EPERM` em `C:\Program Files\nodejs`. Contornado com `npm install -g pnpm` (registrado em D-17).
@@ -60,11 +62,15 @@ Verificações adicionais:
 - **Lint falhava em clone limpo** (`no-unsafe-assignment`), porque os tipos de `packages/shared` não existiam antes do build. Resolvido compilando `shared` no início do script `lint`.
 
 ## 5. Decisões que preciso que você tome
-1. **Push e abertura do PR da Fase 00.** Nada foi enviado. Recomendo autorizar: só assim o CI roda.
-2. **Demonstração de falha no CI.** Opções: (a) commit com teste quebrado seguido de commit de correção no mesmo PR — deixa a prova no histórico do PR, e o squash merge limpa a `main`; (b) aceitar a demonstração local. Recomendo (a).
-3. **Branch protection na `main`** exigindo o check `Lint, typecheck, test and build` — ação manual sua, depois da primeira execução do CI.
-4. **D-05 (dataset de demonstração)** — necessária para a Fase 01. Recomendação do `DECISOES.md`: schema próprio de vendas com seed gerado.
-5. **Driver de banco e ferramenta de migrations** — a Fase 01 exige os dois e não há decisão registrada. O driver já é necessário na Fase 01: os testes precisam conectar como `app_readonly` para provar que `INSERT`/`DROP` falham e que `pg_sleep` é cancelado. Opções a detalhar: driver `pg` + SQL puro versionado com runner simples (ex.: `node-pg-migrate`), ou ORM/query builder com migrations próprias (Drizzle, Prisma, Kysely).
+Respondidas em 2026-10-02:
+1. **Push e abertura do PR da Fase 00** — autorizado; PR #1 aberto.
+2. **Demonstração de falha no CI** — commit com teste quebrado seguido de commit de correção no mesmo PR.
+3. **D-05 (dataset)** — schema próprio de vendas com seed gerado.
+4. **D-19 (driver e migrations)** — driver `pg` + SQL puro com `node-pg-migrate`.
+
+Pendente, ação manual sua:
+- **Merge do PR #1** (squash), com o CI verde.
+- **Branch protection na `main`** exigindo o check `Lint, typecheck, test and build`.
 
 ## 6. Dívida técnica / pontos de atenção
 - **TypeScript 6.0 em vez de 7.0.** Atualizar quando o typescript-eslint suportar. Risco baixo.
@@ -77,4 +83,4 @@ Verificações adicionais:
 
 ## 7. Próximo passo proposto
 - Após sua aprovação: push, PR, CI verde, merge feito por você.
-- Em seguida, **Fase 01 — Banco de demonstração e usuário read-only**, que exige D-05 e a decisão sobre migrations (§5, itens 4 e 5).
+- Em seguida, **Fase 01 — Banco de demonstração e usuário read-only**, com D-05 e D-19 já decididas.

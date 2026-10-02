@@ -51,7 +51,10 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Trade-off:** dataset público é pronto e conhecido; schema próprio controla volume e permite
   perguntas como "faturamento por região no último trimestre" com datas atuais.
 - **Recomendação:** schema próprio com seed gerado.
-- **Status:** PENDENTE
+- **Status:** DECIDIDA
+- **Escolha:** schema próprio de vendas (regiões, produtos, pedidos) com seed gerado
+- **Data:** 2026-10-02
+- **Motivo:** controle de volume e datas atuais para perguntas como "faturamento por região no último trimestre".
 
 ### D-06 — Biblioteca de gráficos
 - **Opções:** Recharts | Chart.js | ECharts
@@ -145,3 +148,10 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Escolha:** PostgreSQL 17 (docker-compose e Testcontainers)
 - **Data:** 2026-10-02
 - **Motivo:** escolha do Guilherme.
+
+### D-19 — Driver de banco e ferramenta de migrations
+- **Opções:** driver `pg` + SQL puro versionado com `node-pg-migrate` | ORM/query builder com migrations próprias (Drizzle, Prisma, Kysely)
+- **Status:** DECIDIDA
+- **Escolha:** driver `pg` + migrations em SQL puro com `node-pg-migrate`
+- **Data:** 2026-10-02
+- **Motivo:** roles, `GRANT` e parâmetros da role read-only ficam explícitos no SQL, que é o foco de segurança da Fase 01.
