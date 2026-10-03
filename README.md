@@ -8,9 +8,9 @@ tabela ou gráfico acompanhada de uma explicação, em streaming.
 > de demonstração com a role read-only (Fase 01), o executor de queries com timeout e
 > limite de linhas (Fase 02) e a guarda SQL (Fase 03) — ou seja, as três camadas de
 > segurança —, o fluxo pergunta → SQL → execução → explicação com a LLM (Fase 04) e as
-> conversas com resposta em streaming, histórico e memória resumida (Fase 05) e a
-> interface de chat (Fase 06). Revisão e edição do SQL antes de executar, autenticação e
-> rate limit ainda estão **planejados**. Este README será expandido na Fase 09 com
+> conversas com resposta em streaming, histórico e memória resumida (Fase 05), a
+> interface de chat (Fase 06) e a revisão/edição do SQL antes de executar (Fase 07).
+> Autenticação, rate limit e deploy ainda estão **planejados**. Este README será expandido na Fase 09 com
 > arquitetura detalhada e GIF de demonstração.
 
 ## Como vai funcionar
@@ -83,7 +83,7 @@ necessárias.
 | 04 | Integração com LLM (texto → SQL → explicação) | Concluída |
 | 05 | Streaming SSE, histórico e memória resumida | Concluída |
 | 06 | Frontend: chat, tabela, gráfico, editor SQL | Concluída |
-| 07 | Human-in-the-loop (revisar/editar SQL) | Pendente |
+| 07 | Human-in-the-loop (revisar/editar SQL) | Concluída |
 | 08 | Autenticação, tokens por usuário, rate limit, cache | Pendente |
 | 09 | Observabilidade, hardening, deploy e README | Pendente |
 
@@ -143,7 +143,8 @@ A API expõe:
 | `POST /api/internal/conversations` | Cria uma conversa. **Desligado por padrão** |
 | `GET /api/internal/conversations` | Lista as conversas, da mais recente para a mais antiga |
 | `GET /api/internal/conversations/:id/messages` | Histórico de uma conversa |
-| `POST /api/internal/conversations/:id/messages` | Faz uma pergunta `{"question": "..."}`; a resposta vem em streaming (SSE) |
+| `POST /api/internal/conversations/:id/messages` | Faz uma pergunta `{"question": "...", "mode": "auto" \| "review"}`; a resposta vem em streaming (SSE) |
+| `POST /api/internal/conversations/:id/messages/:messageId/execute` | Executa `{"sql": "..."}` de uma mensagem em revisão; resposta em streaming |
 
 Todo SQL enviado ao endpoint passa pela guarda SQL e depois pelo executor (transação
 somente leitura, timeout no banco e na aplicação, no máximo `QUERY_MAX_ROWS` linhas).
@@ -216,7 +217,8 @@ Server-Sent Events, nesta ordem:
 | `sql` | O SQL gerado (um evento por tentativa) |
 | `rows` | Colunas, linhas e a sugestão de visualização |
 | `token` | Um pedaço da explicação; vários eventos, na ordem |
-| `done` | Fim: id da mensagem, tentativas e tokens gastos |
+| `review` | Modo revisão: o SQL está pronto e espera aprovação; nada foi executado |
+| `done` | Fim: id da mensagem, tentativas, tokens gastos e, após uma revisão, se o SQL foi editado |
 | `error` | Encerra o stream a qualquer momento, no formato padrão de erro |
 
 ```sh
@@ -225,6 +227,15 @@ curl -N -X POST http://localhost:3000/api/internal/conversations/$ID/messages \
   -H 'content-type: application/json' \
   -d '{"question":"Qual o faturamento total por categoria de produto?"}'
 ```
+
+### Revisar o SQL antes de executar
+
+Com a opção "Revisar o SQL antes de executar" ligada na tela (`mode: "review"` na API),
+o SQL gerado — já aprovado uma vez pela guarda — aparece num editor e só roda quando o
+usuário clicar em "Executar", do jeito que veio ou editado. O SQL enviado passa de novo
+pela guarda no servidor: o frontend nunca é fronteira de segurança. Se for recusado, a
+revisão continua aberta com o motivo. O histórico registra se o SQL foi editado e guarda
+o SQL gerado originalmente (auditoria).
 
 Perguntas seguintes na mesma conversa enxergam as anteriores ("e só da região Sul?").
 A memória envia à LLM um resumo das mensagens antigas mais as recentes na íntegra
