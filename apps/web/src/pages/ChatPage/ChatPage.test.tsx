@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  TEST_USER,
   FakeApi,
   jsonResponse,
   openSseResponse,
@@ -17,7 +18,7 @@ const CONVERSATION: Conversation = {
   createdAt: '2026-10-03T10:00:00.000Z',
   updatedAt: '2026-10-03T10:00:00.000Z',
 };
-const CONVERSATIONS_URL = '/api/internal/conversations';
+const CONVERSATIONS_URL = '/api/conversations';
 const MESSAGES_URL = `${CONVERSATIONS_URL}/${CONVERSATION.id}/messages`;
 
 const RESULT: QueryResult = {
@@ -74,7 +75,7 @@ describe('ChatPage', () => {
   it('shows the empty state with example questions', async () => {
     api.on(`GET ${CONVERSATIONS_URL}`, () => jsonResponse({ items: [] }));
 
-    render(<ChatPage />);
+    render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
 
     expect(await screen.findByText('Nenhuma conversa ainda.')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Pergunte em português' })).toBeInTheDocument();
@@ -94,7 +95,7 @@ describe('ChatPage', () => {
         return jsonResponse({ ...CONVERSATION, title: null }, 201);
       })
       .on(`POST ${MESSAGES_URL}`, (init) => sseResponse(ANSWER, init.signal));
-    render(<ChatPage />);
+    render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
     await screen.findByText('Nenhuma conversa ainda.');
 
     await askQuestion('Quais são as regiões?');
@@ -139,7 +140,7 @@ describe('ChatPage', () => {
         ]),
       );
     const user = userEvent.setup();
-    render(<ChatPage />);
+    render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
     await user.click(await screen.findByRole('button', { name: CONVERSATION.title ?? '' }));
 
     await askQuestion('Apague a região Sul');
@@ -158,7 +159,7 @@ describe('ChatPage', () => {
           503,
         ),
       );
-    render(<ChatPage />);
+    render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
     await screen.findByText('Nenhuma conversa ainda.');
 
     await askQuestion('Quantas regiões?');
@@ -192,7 +193,7 @@ describe('ChatPage', () => {
         }),
       );
     const user = userEvent.setup();
-    render(<ChatPage />);
+    render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
 
     await user.click(await screen.findByRole('button', { name: CONVERSATION.title ?? '' }));
 
@@ -211,7 +212,7 @@ describe('ChatPage', () => {
         jsonResponse({ code: 'INTERNAL_ERROR', message: 'Ocorreu um erro interno.' }, 500),
       );
     const user = userEvent.setup();
-    render(<ChatPage />);
+    render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
 
     await user.click(await screen.findByRole('button', { name: CONVERSATION.title ?? '' }));
 
@@ -232,7 +233,7 @@ describe('ChatPage', () => {
         );
       });
     const user = userEvent.setup();
-    render(<ChatPage />);
+    render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
     await user.click(await screen.findByRole('button', { name: CONVERSATION.title ?? '' }));
     await askQuestion('Pergunta demorada');
     await screen.findByText('Executando a consulta…');
@@ -250,7 +251,7 @@ describe('ChatPage', () => {
       throw new TypeError('Failed to fetch');
     });
 
-    render(<ChatPage />);
+    render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Não foi possível falar com o servidor. Verifique sua conexão.',

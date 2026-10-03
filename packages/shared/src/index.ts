@@ -175,3 +175,28 @@ export interface AnswerStreamEvents {
 }
 
 export type AnswerStreamEventName = keyof AnswerStreamEvents;
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+}
+
+export interface RegisterRequest {
+  name: string;
+  email: string;
+  password: string;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+// Tokens spent today (UTC) by the signed-in user, and the limits that apply.
+export interface UsageSummary {
+  today: TokenUsage;
+  dailyTokenQuota: number;
+  questionsPerMinute: number;
+  byConversation: { conversationId: string; title: string | null; tokens: number }[];
+}

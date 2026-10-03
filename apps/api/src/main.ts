@@ -13,7 +13,7 @@ async function bootstrap(): Promise<void> {
     AppModule.register(env),
     new FastifyAdapter(),
   );
-  configureApp(app);
+  await configureApp(app);
   await app.listen(env.port, LISTEN_HOST);
 }
 

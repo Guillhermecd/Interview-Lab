@@ -10,7 +10,9 @@ export type StreamEvent = {
   [Name in AnswerStreamEventName]: { event: Name; data: AnswerStreamEvents[Name] };
 }[AnswerStreamEventName];
 
-const CONVERSATIONS_PATH = '/api/internal/conversations';
+const CONVERSATIONS_PATH = '/api/conversations';
+
+export const E2E_USER = { id: 'u-1', email: 'ana@example.com', name: 'Ana' };
 
 interface FakeBackendOptions {
   conversations?: Conversation[];
@@ -19,6 +21,8 @@ interface FakeBackendOptions {
   answers?: StreamEvent[][];
   // The events answered to the next execution of a reviewed SQL.
   executions?: StreamEvent[][];
+  // Starts without a session (the login screen appears first).
+  signedOut?: boolean;
 }
 
 function json(route: Route, body: unknown, status = 200): Promise<void> {
@@ -42,6 +46,31 @@ export async function useFakeBackend(page: Page, options: FakeBackendOptions = {
   const answers = [...(options.answers ?? [])];
   const executions = [...(options.executions ?? [])];
   const questions: string[] = [];
+  let signedIn = options.signedOut !== true;
+  const logins: { email: string; password: string }[] = [];
+
+  await page.route('**/api/auth/me', (route) =>
+    signedIn
+      ? json(route, E2E_USER)
+      : json(route, { code: 'UNAUTHORIZED', message: 'Autenticação necessária.' }, 401),
+  );
+  await page.route('**/api/auth/login', async (route) => {
+    logins.push(route.request().postDataJSON() as { email: string; password: string });
+    signedIn = true;
+    await json(route, E2E_USER);
+  });
+  await page.route('**/api/auth/logout', async (route) => {
+    signedIn = false;
+    await route.fulfill({ status: 204 });
+  });
+  await page.route('**/api/usage', (route) =>
+    json(route, {
+      today: { inputTokens: 1200, outputTokens: 300, calls: 4 },
+      dailyTokenQuota: 200000,
+      questionsPerMinute: 10,
+      byConversation: [],
+    }),
+  );
   const modes: string[] = [];
   // SQL received by the execution endpoint (what the user approved or edited).
   const executedSql: string[] = [];
@@ -86,5 +115,5 @@ export async function useFakeBackend(page: Page, options: FakeBackendOptions = {
     await sse(route, executions.shift() ?? []);
   });
 
-  return { questions, modes, executedSql };
+  return { questions, modes, executedSql, logins };
 }

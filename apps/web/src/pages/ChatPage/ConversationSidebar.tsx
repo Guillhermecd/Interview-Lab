@@ -1,4 +1,4 @@
-import type { Conversation } from '@interview-lab/shared';
+import type { AuthUser, Conversation, UsageSummary } from '@interview-lab/shared';
 import { Button } from '../../components/ui/Button';
 import { ErrorMessage } from '../../components/ui/ErrorMessage';
 import { Spinner } from '../../components/ui/Spinner';
@@ -13,7 +13,12 @@ interface ConversationSidebarProps {
   onSelect: (conversationId: string) => void;
   onNew: () => void;
   onToggleTheme: () => void;
+  user: AuthUser;
+  usage: UsageSummary | undefined;
+  onLogout: () => void;
 }
+
+const numberFormat = new Intl.NumberFormat('pt-BR');
 
 export function ConversationSidebar({
   conversations,
@@ -24,6 +29,9 @@ export function ConversationSidebar({
   onSelect,
   onNew,
   onToggleTheme,
+  user,
+  usage,
+  onLogout,
 }: ConversationSidebarProps) {
   return (
     <aside className="flex w-full flex-col gap-3 border-b border-border bg-surface p-3 md:h-full md:w-72 md:border-r md:border-b-0">
@@ -67,6 +75,23 @@ export function ConversationSidebar({
           ))}
         </ul>
       </nav>
+
+      <footer className="space-y-2 border-t border-border pt-3 text-sm">
+        {usage && (
+          <p className="text-xs text-muted">
+            Uso hoje: {numberFormat.format(usage.today.inputTokens + usage.today.outputTokens)} de{' '}
+            {numberFormat.format(usage.dailyTokenQuota)} tokens
+          </p>
+        )}
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate" title={user.email}>
+            {user.name}
+          </span>
+          <Button variant="ghost" onClick={onLogout}>
+            Sair
+          </Button>
+        </div>
+      </footer>
     </aside>
   );
 }

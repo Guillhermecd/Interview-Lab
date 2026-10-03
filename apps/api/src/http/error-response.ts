@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, type Logger } from '@nestjs/common';
 import type { ApiErrorBody } from '@interview-lab/shared';
+import { LimitError } from '../limits/limit-error.js';
 import { LlmError, type LlmErrorCode } from '../llm/llm-error.js';
 import { QueryExecutionError, type QueryErrorCode } from '../query/query-error.js';
 import { ValidationError } from './validation-error.js';
@@ -44,6 +45,17 @@ const INTERNAL_ERROR: ApiErrorBody = {
   message: 'Ocorreu um erro interno.',
 };
 
+function isErrorBody(value: unknown): value is ApiErrorBody {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'code' in value &&
+    'message' in value &&
+    typeof value.code === 'string' &&
+    typeof value.message === 'string'
+  );
+}
+
 export interface ErrorResponse {
   status: number;
   body: ApiErrorBody;
@@ -79,8 +91,20 @@ export function toErrorResponse(exception: unknown, logger: Logger): ErrorRespon
     };
   }
 
+  if (exception instanceof LimitError) {
+    return {
+      status: HttpStatus.TOO_MANY_REQUESTS,
+      body: { code: exception.code, message: exception.message },
+    };
+  }
+
   if (exception instanceof HttpException) {
     const status = exception.getStatus();
+    // Errors raised with their own code and message (e.g. INVALID_CREDENTIALS).
+    const own = exception.getResponse();
+    if (isErrorBody(own)) {
+      return { status, body: { code: own.code, message: own.message } };
+    }
     const body = HTTP_ERRORS.get(status);
     if (body) {
       return { status, body };

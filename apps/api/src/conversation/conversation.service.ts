@@ -10,6 +10,7 @@ import { AskService, type AskEvent, type SqlForReview } from '../ask/ask.service
 import { parseSummary } from '../ask/llm-output.js';
 import { buildSummaryRequest } from '../ask/prompts.js';
 import { toErrorResponse } from '../http/error-response.js';
+import { UsageService } from '../limits/usage.service.js';
 import { LLM_PROVIDER, type LlmProvider } from '../llm/llm-provider.js';
 import { describeErrorForLog } from '../query/query-error.js';
 import { selectMessagesToSummarize, toConversationContext } from './conversation-memory.js';
@@ -102,18 +103,19 @@ export class ConversationService {
       'stream' | 'streamReview' | 'streamReviewedExecution'
     >,
     @Inject(LLM_PROVIDER) private readonly provider: LlmProvider,
+    @Inject(UsageService) private readonly usage: Pick<UsageService, 'record'>,
   ) {}
 
-  create(): Promise<Conversation> {
-    return this.repository.create();
+  create(ownerId: string): Promise<Conversation> {
+    return this.repository.create(ownerId);
   }
 
-  list(): Promise<Conversation[]> {
-    return this.repository.list();
+  list(ownerId: string): Promise<Conversation[]> {
+    return this.repository.list(ownerId);
   }
 
-  exists(conversationId: string): Promise<boolean> {
-    return this.repository.exists(conversationId);
+  isOwnedBy(conversationId: string, ownerId: string): Promise<boolean> {
+    return this.repository.isOwnedBy(conversationId, ownerId);
   }
 
   listMessages(conversationId: string): Promise<ConversationMessage[]> {
@@ -125,6 +127,7 @@ export class ConversationService {
   // instead of an exception, because by then the HTTP response has started.
   // If `signal` is aborted (the client left), the stream just ends.
   async *answer(
+    userId: string,
     conversationId: string,
     question: string,
     mode: AskMode,
@@ -145,6 +148,12 @@ export class ConversationService {
       const message = await this.repository.addAssistantMessage(
         conversationId,
         toAssistantMessage(answer),
+      );
+      await this.usage.record(
+        userId,
+        conversationId,
+        answer.status === 'pending_review' ? 'review' : 'answer',
+        answer.usage,
       );
       yield lastEvent(answer, message.id);
     } catch (error) {
@@ -184,6 +193,7 @@ export class ConversationService {
   // refused or anything fails, the message stays pending, so the user can fix
   // the SQL and try again.
   async *executeReview(
+    userId: string,
     conversationId: string,
     pending: PendingReview,
     sql: string,
@@ -212,6 +222,7 @@ export class ConversationService {
       if (!completed) {
         throw new ConflictException();
       }
+      await this.usage.record(userId, conversationId, 'execution', answer.usage);
       yield {
         event: 'done',
         data: {
@@ -232,7 +243,7 @@ export class ConversationService {
   // Applies the memory rule (D-27). Returns true when a new summary was stored.
   // Meant to run after an answer has been delivered; a failure here only delays
   // the summary until the next answer.
-  async refreshMemory(conversationId: string): Promise<boolean> {
+  async refreshMemory(userId: string, conversationId: string): Promise<boolean> {
     const memory = await this.repository.loadMemory(conversationId);
     const toSummarize = selectMessagesToSummarize(memory.unsummarized);
     const last = toSummarize.at(-1);
@@ -247,6 +258,7 @@ export class ConversationService {
       }),
     );
     await this.repository.saveSummary(conversationId, parseSummary(response.data), last.id);
+    await this.usage.record(userId, conversationId, 'summary', { ...response.usage, calls: 1 });
     return true;
   }
 

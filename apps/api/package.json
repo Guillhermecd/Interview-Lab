@@ -18,11 +18,14 @@
     "eval:llm": "pnpm build && node --env-file-if-exists=../../.env dist/ask/evaluation-cli.js"
   },
   "dependencies": {
+    "@fastify/cookie": "^11.1.2",
     "@google/genai": "^2.25.0",
     "@interview-lab/shared": "workspace:*",
     "@nestjs/common": "^12.1.2",
     "@nestjs/core": "^12.1.2",
     "@nestjs/platform-fastify": "^12.1.2",
+    "ioredis": "^6.0.0",
+    "jose": "^6.2.12",
     "libpg-query": "17.7.4",
     "node-pg-migrate": "^9.0.0",
     "pg": "^8.23.1",

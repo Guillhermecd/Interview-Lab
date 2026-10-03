@@ -1,3 +1,4 @@
+import type { AuthUser } from '@interview-lab/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ErrorMessage } from '../../components/ui/ErrorMessage';
 import { Spinner } from '../../components/ui/Spinner';
@@ -8,6 +9,7 @@ import { ConversationSidebar } from './ConversationSidebar';
 import { QuestionForm } from './QuestionForm';
 import { useChat } from './useChat';
 import { useConversationList } from './useConversationList';
+import { useUsage } from './useUsage';
 
 const EXAMPLE_QUESTIONS = [
   'Qual foi o faturamento por região no último trimestre?',
@@ -15,10 +17,17 @@ const EXAMPLE_QUESTIONS = [
   'Como evoluiu o número de pedidos por mês?',
 ];
 
-export function ChatPage() {
+interface ChatPageProps {
+  user: AuthUser;
+  onLogout: () => void;
+}
+
+export function ChatPage({ user, onLogout }: ChatPageProps) {
   const { theme, toggleTheme } = useTheme();
   const { review, setReview } = useReviewPreference();
   const conversationList = useConversationList();
+  const usage = useUsage();
+  const { refresh: refreshUsage } = usage;
   const [selectedId, setSelectedId] = useState<string>();
   const { refresh } = conversationList;
 
@@ -34,9 +43,10 @@ export function ChatPage() {
   useEffect(() => {
     if (wasAnsweringRef.current && !chat.isAnswering) {
       void refresh();
+      void refreshUsage();
     }
     wasAnsweringRef.current = chat.isAnswering;
-  }, [chat.isAnswering, refresh]);
+  }, [chat.isAnswering, refresh, refreshUsage]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' });
@@ -59,6 +69,9 @@ export function ChatPage() {
           setSelectedId(undefined);
         }}
         onToggleTheme={toggleTheme}
+        user={user}
+        usage={usage.usage}
+        onLogout={onLogout}
       />
 
       <main className="flex min-h-0 flex-1 flex-col">

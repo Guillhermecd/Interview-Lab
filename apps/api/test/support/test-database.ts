@@ -1,14 +1,23 @@
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { Client, type ClientConfig } from 'pg';
+import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers';
 import type { AppEnv, QueryEnv } from '../../src/config/env.js';
+import type { LimitsEnv } from '../../src/config/security-env.js';
 import { migrateUp } from '../../src/database/migrate.js';
 import { provisionRolePasswords } from '../../src/database/provision-roles.js';
 import { APP_ROLE, READONLY_ROLE } from '../../src/database/roles.js';
 
 const POSTGRES_IMAGE = 'postgres:17-alpine';
+const REDIS_IMAGE = 'redis:7-alpine';
+const REDIS_PORT = 6379;
 const READONLY_TEST_PASSWORD = 'readonly-test-password';
 const APP_TEST_PASSWORD = 'app-test-password';
 const TEST_POOL_MAX = 4;
+// Nothing listens here: tests that need Redis start it with { redis: true }.
+const NO_REDIS_URL = 'redis://127.0.0.1:1';
+
+export const TEST_ALLOWED_ORIGIN = 'http://localhost:5173';
+
 const DEFAULT_TEST_QUERY_ENV: QueryEnv = {
   maxRows: 1000,
   statementTimeoutMs: 5000,
@@ -16,12 +25,25 @@ const DEFAULT_TEST_QUERY_ENV: QueryEnv = {
   internalEndpointEnabled: false,
 };
 
+const DEFAULT_TEST_LIMITS: LimitsEnv = {
+  questionsPerMinute: 1000,
+  dailyTokenQuota: 10_000_000,
+  loginAttemptsPerMinute: 1000,
+  sqlCacheTtlSeconds: 0,
+  resultCacheTtlSeconds: 0,
+};
+
+export interface TestEnvOptions {
+  query?: Partial<QueryEnv>;
+  limits?: Partial<LimitsEnv>;
+}
+
 export interface TestDatabase {
   admin: ClientConfig;
   readonly: ClientConfig;
   app: ClientConfig;
-  // What the API needs to reach this database as app_readonly.
-  appEnv: (query?: Partial<QueryEnv>) => AppEnv;
+  // What the API needs to reach this database (and Redis, when started).
+  appEnv: (query?: Partial<QueryEnv>, options?: Omit<TestEnvOptions, 'query'>) => AppEnv;
   stop: () => Promise<void>;
 }
 
@@ -52,15 +74,29 @@ function connectionFor(container: StartedPostgreSqlContainer, user: string, pass
   };
 }
 
-// Starts an empty PostgreSQL 17. Tests that need the schema call migrateTestDatabase.
-export async function startTestDatabase(): Promise<TestDatabase> {
-  const container = await new PostgreSqlContainer(POSTGRES_IMAGE).start();
+async function startRedis(): Promise<StartedTestContainer> {
+  return new GenericContainer(REDIS_IMAGE)
+    .withExposedPorts(REDIS_PORT)
+    .withWaitStrategy(Wait.forLogMessage('Ready to accept connections'))
+    .start();
+}
+
+// Starts an empty PostgreSQL 17 (and Redis, if asked). Tests that need the
+// schema call migrateTestDatabase.
+export async function startTestDatabase(options: { redis?: boolean } = {}): Promise<TestDatabase> {
+  const [container, redis] = await Promise.all([
+    new PostgreSqlContainer(POSTGRES_IMAGE).start(),
+    options.redis === true ? startRedis() : Promise.resolve(undefined),
+  ]);
+  const redisUrl = redis
+    ? `redis://${redis.getHost()}:${String(redis.getMappedPort(REDIS_PORT))}`
+    : NO_REDIS_URL;
 
   return {
     admin: connectionFor(container, container.getUsername(), container.getPassword()),
     readonly: connectionFor(container, READONLY_ROLE, READONLY_TEST_PASSWORD),
     app: connectionFor(container, APP_ROLE, APP_TEST_PASSWORD),
-    appEnv: (query = {}) => ({
+    appEnv: (query = {}, envOptions = {}) => ({
       port: 0,
       database: {
         host: container.getHost(),
@@ -83,9 +119,17 @@ export async function startTestDatabase(): Promise<TestDatabase> {
         timeoutMs: 5000,
         explainMaxRows: 50,
       },
+      auth: {
+        jwtSecret: 'integration-test-secret-with-32-chars!!',
+        jwtExpiresInSeconds: 3600,
+        secureCookies: false,
+        allowedOrigins: [TEST_ALLOWED_ORIGIN],
+      },
+      redis: { url: redisUrl },
+      limits: { ...DEFAULT_TEST_LIMITS, ...envOptions.limits },
     }),
     stop: async () => {
-      await container.stop();
+      await Promise.all([container.stop(), redis?.stop()]);
     },
   };
 }

@@ -18,6 +18,7 @@ import {
 import { GuardedQueryService } from '../query/guarded-query.service.js';
 import { QueryExecutionError, type QueryErrorCode } from '../query/query-error.js';
 import { SchemaCatalog } from '../query/schema-catalog.service.js';
+import { ANSWER_CACHE, type AnswerCache } from './answer-cache.js';
 import {
   MAX_EXPLANATION_LENGTH,
   parseSqlGeneration,
@@ -93,6 +94,10 @@ interface Refusal {
   reason: string;
 }
 
+function hasHistory(context: ConversationContext | undefined): boolean {
+  return context !== undefined && (context.summary !== undefined || context.recent.length > 0);
+}
+
 function describeFailure(error: QueryExecutionError): string {
   const details = error.details?.map((detail) => detail.message) ?? [];
   return [error.message, ...details].join(' ');
@@ -159,6 +164,7 @@ export class AskService {
     @Inject(GuardedQueryService)
     private readonly queries: Pick<GuardedQueryService, 'run' | 'check'>,
     @Inject(ASK_LIMITS) private readonly limits: AskLimits,
+    @Inject(ANSWER_CACHE) private readonly cache: AnswerCache,
   ) {}
 
   // Answers the question, yielding each step as it happens; the final answer is
@@ -167,7 +173,9 @@ export class AskService {
   async *stream(input: AskInput, signal?: AbortSignal): AsyncGenerator<AskEvent, AskResponse> {
     const llm = new MeteredLlm(this.provider, signal);
 
-    const generated = yield* this.generate(input, llm, (sql) => this.queries.run(sql, signal));
+    const generated = yield* this.generate(input, llm, (sql, version) =>
+      this.runCached(sql, version, signal),
+    );
     if (isRefusal(generated)) {
       return yield* this.refuse(input.question, generated.reason, llm);
     }
@@ -216,7 +224,8 @@ export class AskService {
     signal?: AbortSignal,
   ): AsyncGenerator<AskEvent, AnsweredQuestion> {
     const llm = new MeteredLlm(this.provider, signal);
-    const result = await this.queries.run(input.sql, signal);
+    const { version } = await this.schemaCatalog.describe();
+    const result = await this.runCached(input.sql, version, signal);
 
     return yield* this.explain(
       input.question,
@@ -245,9 +254,20 @@ export class AskService {
   private async *generate<T>(
     input: AskInput,
     llm: MeteredLlm,
-    attempt: (sql: string) => Promise<T>,
+    attempt: (sql: string, schemaVersion: string) => Promise<T>,
   ): AsyncGenerator<AskEvent, Generated<T> | Refusal> {
     const schema = await this.schemaCatalog.describe();
+    // Only a question that does not depend on earlier messages can reuse the
+    // SQL generated for the same question before.
+    const cacheable = !hasHistory(input.context);
+
+    if (cacheable) {
+      const cached = yield* this.tryCachedSql(input.question, schema.version, attempt);
+      if (cached) {
+        return cached;
+      }
+    }
+
     let previous: FailedAttempt | undefined;
 
     for (let attemptNumber = 1; ; attemptNumber += 1) {
@@ -269,11 +289,18 @@ export class AskService {
       yield { type: 'sql', sql: generation.sql, attempt: attemptNumber };
 
       try {
+        const outcome = await attempt(generation.sql, schema.version);
+        if (cacheable) {
+          await this.cache.setSql(input.question, schema.version, {
+            sql: generation.sql,
+            proposedVisualization: generation.visualization,
+          });
+        }
         return {
           sql: generation.sql,
           proposedVisualization: generation.visualization,
           attempts: attemptNumber,
-          outcome: await attempt(generation.sql),
+          outcome,
         };
       } catch (error) {
         const retryable =
@@ -286,6 +313,49 @@ export class AskService {
         previous = { sql: generation.sql, error: describeFailure(error) };
       }
     }
+  }
+
+  // A cached SQL still goes through `attempt` (the guard, and the database).
+  // If it fails now, the entry is dropped and the LLM writes a new one.
+  private async *tryCachedSql<T>(
+    question: string,
+    schemaVersion: string,
+    attempt: (sql: string, schemaVersion: string) => Promise<T>,
+  ): AsyncGenerator<AskEvent, Generated<T> | undefined> {
+    const cached = await this.cache.getSql(question, schemaVersion);
+    if (cached === undefined) {
+      return undefined;
+    }
+    yield { type: 'sql', sql: cached.sql, attempt: 1 };
+    try {
+      return {
+        sql: cached.sql,
+        proposedVisualization: cached.proposedVisualization,
+        attempts: 1,
+        outcome: await attempt(cached.sql, schemaVersion),
+      };
+    } catch (error) {
+      if (!(error instanceof QueryExecutionError) || !RETRYABLE_ERRORS.has(error.code)) {
+        throw error;
+      }
+      await this.cache.deleteSql(question, schemaVersion);
+      return undefined;
+    }
+  }
+
+  // Results of the same SQL are reused for a short time (RESULT_CACHE_TTL_SECONDS).
+  private async runCached(
+    sql: string,
+    schemaVersion: string,
+    signal: AbortSignal | undefined,
+  ): Promise<QueryResult> {
+    const cached = await this.cache.getResult(sql, schemaVersion);
+    if (cached) {
+      return cached;
+    }
+    const result = await this.queries.run(sql, signal);
+    await this.cache.setResult(sql, schemaVersion, result);
+    return result;
   }
 
   private *refuse(
