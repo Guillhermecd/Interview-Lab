@@ -12,7 +12,7 @@ import type {
 import { ApiError, request, requestJson } from './api';
 import { readServerSentEvents } from './sse';
 
-const BASE_PATH = '/internal/conversations';
+const BASE_PATH = '/conversations';
 
 const EVENT_NAMES: readonly AnswerStreamEventName[] = [
   'sql',

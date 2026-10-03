@@ -14,6 +14,18 @@ const UNEXPECTED_RESPONSE: ApiErrorBody = {
   message: 'O servidor devolveu uma resposta inesperada.',
 };
 
+const UNAUTHORIZED_STATUS = 401;
+// Checking the session answers 401 when there is none; that is not an expiry.
+const SESSION_PATH = '/auth/me';
+
+let unauthorizedHandler: (() => void) | undefined;
+
+// The session lives in an HttpOnly cookie sent by the browser itself (D-08),
+// so no token is ever handled here. On a 401 the registered handler runs.
+export function onUnauthorized(handler: (() => void) | undefined): void {
+  unauthorizedHandler = handler;
+}
+
 // An error in the standard API format. Screens decide what to do by `code`,
 // never by the text of `message`.
 export class ApiError extends Error {
@@ -58,7 +70,12 @@ export async function request(path: string, init: RequestInit = {}): Promise<Res
 
   if (!response.ok) {
     const body: unknown = await response.json().catch(() => undefined);
-    throw new ApiError(isApiErrorBody(body) ? body : UNEXPECTED_RESPONSE);
+    const error = new ApiError(isApiErrorBody(body) ? body : UNEXPECTED_RESPONSE);
+    // The session expired or was never there: the screen goes back to login.
+    if (response.status === UNAUTHORIZED_STATUS && path !== SESSION_PATH) {
+      unauthorizedHandler?.();
+    }
+    throw error;
   }
   return response;
 }
