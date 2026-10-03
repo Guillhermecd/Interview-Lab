@@ -19,7 +19,7 @@ tabela/gráfico + explicação, em streaming.
 | 05 | Streaming SSE, histórico e memória resumida | D-07 | CONCLUÍDA |
 | 06 | Frontend: chat, tabela, gráfico, editor SQL | D-06 | CONCLUÍDA |
 | 07 | Human-in-the-loop (revisar/editar SQL) | — | CONCLUÍDA |
-| 08 | Autenticação, tokens por usuário, rate limit, cache | D-07b, D-08 | PENDENTE |
+| 08 | Autenticação, tokens por usuário, rate limit, cache | D-07b, D-08 | CONCLUÍDA |
 | 09 | Observabilidade, hardening, deploy e README | D-11 | PENDENTE |
 
 A ordem acima é uma proposta (ver D-10).

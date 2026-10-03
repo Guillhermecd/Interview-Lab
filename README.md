@@ -9,8 +9,9 @@ tabela ou gráfico acompanhada de uma explicação, em streaming.
 > limite de linhas (Fase 02) e a guarda SQL (Fase 03) — ou seja, as três camadas de
 > segurança —, o fluxo pergunta → SQL → execução → explicação com a LLM (Fase 04) e as
 > conversas com resposta em streaming, histórico e memória resumida (Fase 05), a
-> interface de chat (Fase 06) e a revisão/edição do SQL antes de executar (Fase 07).
-> Autenticação, rate limit e deploy ainda estão **planejados**. Este README será expandido na Fase 09 com
+> interface de chat (Fase 06), a revisão/edição do SQL antes de executar (Fase 07) e
+> autenticação, limites de uso e cache (Fase 08). Observabilidade e deploy ainda estão
+> **planejados**. Este README será expandido na Fase 09 com
 > arquitetura detalhada e GIF de demonstração.
 
 ## Como vai funcionar
@@ -47,21 +48,22 @@ Regras complementares:
 | Frontend | React + TypeScript + Vite, Tailwind CSS, Recharts, CodeMirror 6 | `PLANO.md`, D-06, D-29, D-30 |
 | Banco | PostgreSQL | `PLANO.md` |
 | Repositório | Monorepo com pnpm workspaces (`apps/api`, `apps/web`, `packages/shared`) | D-02 |
+| Autenticação | JWT (`jose`) em cookie `HttpOnly`, senhas com `scrypt` | D-08, D-36 |
+| Rate limit e cache | Redis (`ioredis`) | D-07b, D-37 |
 | Testes | Vitest, Testcontainers, Testing Library, Playwright | D-09, D-31 |
 | Parser SQL | `libpg-query` 17 (parser do próprio Postgres, mesma versão do banco) | D-04, D-24 |
 | Acesso ao banco | Driver `pg`, migrations em SQL puro com `node-pg-migrate` | D-19 |
 
 | LLM | Google Gemini atrás de uma interface própria (`LlmProvider`) | D-03 |
 
-Biblioteca de gráficos, cache, autenticação e deploy ainda estão em aberto — ver
-[DECISOES.md](DECISOES.md).
+O deploy ainda está em aberto — ver [DECISOES.md](DECISOES.md).
 
 ## Banco de dados
 
 | Schema | Conteúdo | Quem acessa |
 |---|---|---|
 | `sales` | Dados de demonstração: `regions`, `products`, `customers`, `orders`, `order_items` | `app_readonly` (somente `SELECT`) |
-| `app` | Dados da aplicação: `conversations` e `messages` (usuários e tokens chegam na Fase 08) | `app_rw` |
+| `app` | Dados da aplicação: `users`, `conversations`, `messages` e `token_usage` | `app_rw` |
 | `migrations` | Histórico de migrations | Apenas o administrador |
 
 A role `app_readonly` é a que executará o SQL gerado pela IA. Ela só tem `SELECT` nas
@@ -84,7 +86,7 @@ necessárias.
 | 05 | Streaming SSE, histórico e memória resumida | Concluída |
 | 06 | Frontend: chat, tabela, gráfico, editor SQL | Concluída |
 | 07 | Human-in-the-loop (revisar/editar SQL) | Concluída |
-| 08 | Autenticação, tokens por usuário, rate limit, cache | Pendente |
+| 08 | Autenticação, tokens por usuário, rate limit, cache | Concluída |
 | 09 | Observabilidade, hardening, deploy e README | Pendente |
 
 Entregas e critérios de verificação de cada fase estão em [PLANO.md](PLANO.md).
@@ -115,8 +117,8 @@ de teste de forma intermitente), pnpm 12 e Docker.
 pnpm install
 cp .env.example .env
 
-# PostgreSQL 17 local
-docker compose up -d postgres
+# PostgreSQL 17 e Redis locais
+docker compose up -d postgres redis
 
 # Migrations + senhas das roles + dados de demonstração
 pnpm --filter @interview-lab/api db:setup
@@ -128,29 +130,48 @@ pnpm --filter @interview-lab/api dev
 pnpm --filter @interview-lab/web dev
 ```
 
-O web (http://localhost:5173) é um chat: lista de conversas, pergunta em português,
-resposta em streaming com o SQL gerado, gráfico (barra ou linha, quando faz sentido),
-tabela de resultado e explicação; tema claro e escuro. Ele usa os endpoints internos,
-então rode a API com `INTERNAL_QUERY_ENDPOINT_ENABLED=true` no `.env` e a chave do Gemini
-configurada.
+O web (http://localhost:5173) começa pela tela de login/cadastro e depois mostra o
+chat: lista de conversas, pergunta em português, resposta em streaming com o SQL
+gerado, gráfico (barra ou linha, quando faz sentido), tabela de resultado e explicação;
+consumo de tokens do dia; tema claro e escuro. Configure a chave do Gemini e um
+`JWT_SECRET` com 32+ caracteres no `.env`.
 
 A API expõe:
 
 | Rota | Descrição |
 |---|---|
 | `GET /api/health` | `200 {"status":"ok"}` quando a aplicação e o banco respondem; `503` caso contrário |
-| `POST /api/internal/queries/execute` | Executa `{"sql": "..."}` como `app_readonly`. **Desligado por padrão** (ver abaixo) |
-| `POST /api/internal/conversations` | Cria uma conversa. **Desligado por padrão** |
-| `GET /api/internal/conversations` | Lista as conversas, da mais recente para a mais antiga |
-| `GET /api/internal/conversations/:id/messages` | Histórico de uma conversa |
-| `POST /api/internal/conversations/:id/messages` | Faz uma pergunta `{"question": "...", "mode": "auto" \| "review"}`; a resposta vem em streaming (SSE) |
-| `POST /api/internal/conversations/:id/messages/:messageId/execute` | Executa `{"sql": "..."}` de uma mensagem em revisão; resposta em streaming |
+| `POST /api/auth/register` · `POST /api/auth/login` | Cria conta / entra; a sessão vai num cookie `HttpOnly` |
+| `POST /api/auth/logout` · `GET /api/auth/me` | Sai (apaga o cookie) / usuário atual |
+| `GET /api/usage` | Tokens gastos hoje, no total e por conversa, e os limites |
+| `POST /api/conversations` | Cria uma conversa do usuário |
+| `GET /api/conversations` | Lista as conversas do usuário, da mais recente para a mais antiga |
+| `GET /api/conversations/:id/messages` | Histórico de uma conversa |
+| `POST /api/conversations/:id/messages` | Faz uma pergunta `{"question": "...", "mode": "auto" \| "review"}`; a resposta vem em streaming (SSE) |
+| `POST /api/conversations/:id/messages/:messageId/execute` | Executa `{"sql": "..."}` de uma mensagem em revisão; resposta em streaming |
 
-Todo SQL enviado ao endpoint passa pela guarda SQL e depois pelo executor (transação
-somente leitura, timeout no banco e na aplicação, no máximo `QUERY_MAX_ROWS` linhas).
-O endpoint ainda **não tem autenticação nem rate limit**, que chegam na Fase 08. Por
-isso só existe quando `INTERNAL_QUERY_ENDPOINT_ENABLED=true` no `.env`; use apenas em
-testes locais.
+| `POST /api/internal/queries/execute` | Executa `{"sql": "..."}` como `app_readonly`, para depuração. **Desligado por padrão** |
+
+Todas as rotas, exceto health, cadastro e login, exigem a sessão. Conversas são
+privadas: a de outro usuário responde `404`. O endpoint interno de SQL passa pela guarda
+e pelo executor, exige login e só existe com `INTERNAL_QUERY_ENDPOINT_ENABLED=true`.
+
+### Autenticação e limites
+
+- **Sessão em cookie `HttpOnly`, `SameSite=Strict`** (e `Secure` em produção): o
+  JavaScript da página não lê o token. Requisições que alteram dados vindas de uma
+  origem fora de `ALLOWED_ORIGINS` são recusadas (proteção contra CSRF).
+- **Senhas com `scrypt`**; login com erro genérico ("e-mail ou senha incorretos") e
+  limite de tentativas por e-mail.
+- **Antes de qualquer chamada à LLM**, cada usuário passa por um limite de perguntas por
+  minuto e por uma cota diária de tokens (padrões: 10/min e 200 mil/dia). Acima disso, a
+  API responde `429` sem chamar a LLM.
+- **Consumo registrado** por usuário e conversa, inclusive as chamadas de resumo da
+  memória.
+- **Cache no Redis** de perguntas repetidas (o SQL gerado, por 1 hora) e de resultados
+  (5 minutos). As chaves incluem a versão do schema, então uma mudança no banco invalida
+  tudo. Perguntas de continuação, que dependem da conversa, não usam o cache de SQL. O
+  SQL vindo do cache passa pela guarda de novo.
 
 ### O que a guarda SQL aceita
 
@@ -222,8 +243,13 @@ Server-Sent Events, nesta ordem:
 | `error` | Encerra o stream a qualquer momento, no formato padrão de erro |
 
 ```sh
-ID=$(curl -s -X POST http://localhost:3000/api/internal/conversations | jq -r .id)
-curl -N -X POST http://localhost:3000/api/internal/conversations/$ID/messages \
+# Cria a conta e guarda o cookie da sessão
+curl -s -c cookies.txt -X POST http://localhost:3000/api/auth/register \
+  -H 'content-type: application/json' \
+  -d '{"name":"Ana","email":"ana@example.com","password":"uma-senha-segura"}'
+
+ID=$(curl -s -b cookies.txt -X POST http://localhost:3000/api/conversations | jq -r .id)
+curl -N -b cookies.txt -X POST http://localhost:3000/api/conversations/$ID/messages \
   -H 'content-type: application/json' \
   -d '{"question":"Qual o faturamento total por categoria de produto?"}'
 ```
