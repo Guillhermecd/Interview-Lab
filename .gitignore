@@ -25,3 +25,7 @@ Thumbs.db
 template/README.md
 template/CONTRIBUTING.md
 template/docs/
+
+# Playwright
+test-results/
+playwright-report/
