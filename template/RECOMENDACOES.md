@@ -37,9 +37,10 @@ Comandos (definidos na Fase 00), executados na raiz do repositório:
 | 3. testes unitários | `pnpm test` |
 | 4. testes de integração | `pnpm test:integration` (exige Docker em execução) |
 | 5. build | `pnpm build` |
+| 6. testes E2E | `pnpm test:e2e` (Playwright; na primeira vez, `pnpm --filter @interview-lab/web exec playwright install chromium`) |
 
-`pnpm verify` roda as cinco etapas na ordem e para na primeira falha. O CI
-(`.github/workflows/ci.yml`) executa os mesmos comandos.
+`pnpm verify` roda as seis etapas na ordem e para na primeira falha. O CI
+(`.github/workflows/ci.yml`) executa os mesmos comandos. A etapa 6 foi acrescentada na Fase 06.
 
 ## Testes
 - Toda regra da guarda SQL tem teste positivo e negativo.

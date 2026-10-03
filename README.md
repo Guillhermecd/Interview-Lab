@@ -8,8 +8,9 @@ tabela ou gráfico acompanhada de uma explicação, em streaming.
 > de demonstração com a role read-only (Fase 01), o executor de queries com timeout e
 > limite de linhas (Fase 02) e a guarda SQL (Fase 03) — ou seja, as três camadas de
 > segurança —, o fluxo pergunta → SQL → execução → explicação com a LLM (Fase 04) e as
-> conversas com resposta em streaming, histórico e memória resumida (Fase 05). A
-> interface de chat descrita abaixo está **planejada**, ainda não implementada. Este README será expandido na Fase 09 com
+> conversas com resposta em streaming, histórico e memória resumida (Fase 05) e a
+> interface de chat (Fase 06). Revisão e edição do SQL antes de executar, autenticação e
+> rate limit ainda estão **planejados**. Este README será expandido na Fase 09 com
 > arquitetura detalhada e GIF de demonstração.
 
 ## Como vai funcionar
@@ -43,10 +44,10 @@ Regras complementares:
 | Área | Escolha | Decisão |
 |---|---|---|
 | Backend | NestJS com adapter Fastify, TypeScript `strict` | D-01 |
-| Frontend | React + TypeScript + Vite | `PLANO.md` |
+| Frontend | React + TypeScript + Vite, Tailwind CSS, Recharts, CodeMirror 6 | `PLANO.md`, D-06, D-29, D-30 |
 | Banco | PostgreSQL | `PLANO.md` |
 | Repositório | Monorepo com pnpm workspaces (`apps/api`, `apps/web`, `packages/shared`) | D-02 |
-| Testes | Vitest, Testcontainers, Playwright | D-09 |
+| Testes | Vitest, Testcontainers, Testing Library, Playwright | D-09, D-31 |
 | Parser SQL | `libpg-query` 17 (parser do próprio Postgres, mesma versão do banco) | D-04, D-24 |
 | Acesso ao banco | Driver `pg`, migrations em SQL puro com `node-pg-migrate` | D-19 |
 
@@ -81,7 +82,7 @@ necessárias.
 | 03 | Guarda SQL (parser e validação) | Concluída |
 | 04 | Integração com LLM (texto → SQL → explicação) | Concluída |
 | 05 | Streaming SSE, histórico e memória resumida | Concluída |
-| 06 | Frontend: chat, tabela, gráfico, editor SQL | Pendente |
+| 06 | Frontend: chat, tabela, gráfico, editor SQL | Concluída |
 | 07 | Human-in-the-loop (revisar/editar SQL) | Pendente |
 | 08 | Autenticação, tokens por usuário, rate limit, cache | Pendente |
 | 09 | Observabilidade, hardening, deploy e README | Pendente |
@@ -127,7 +128,13 @@ pnpm --filter @interview-lab/api dev
 pnpm --filter @interview-lab/web dev
 ```
 
-Por enquanto o web é apenas uma página estática. A API expõe:
+O web (http://localhost:5173) é um chat: lista de conversas, pergunta em português,
+resposta em streaming com o SQL gerado, gráfico (barra ou linha, quando faz sentido),
+tabela de resultado e explicação; tema claro e escuro. Ele usa os endpoints internos,
+então rode a API com `INTERNAL_QUERY_ENDPOINT_ENABLED=true` no `.env` e a chave do Gemini
+configurada.
+
+A API expõe:
 
 | Rota | Descrição |
 |---|---|
@@ -246,11 +253,13 @@ usada.
 ### Verificação
 
 ```sh
-pnpm verify   # lint → typecheck → testes unitários → testes de integração → build
+pnpm verify   # lint → typecheck → testes unitários → testes de integração → build → E2E
 ```
 
 Cada etapa também roda isolada: `pnpm lint`, `pnpm typecheck`, `pnpm test`,
-`pnpm test:integration` (exige Docker em execução) e `pnpm build`.
+`pnpm test:integration` (exige Docker em execução), `pnpm build` e `pnpm test:e2e`
+(Playwright; antes da primeira execução: `pnpm --filter @interview-lab/web exec playwright
+install chromium`).
 
 ### Estrutura
 
