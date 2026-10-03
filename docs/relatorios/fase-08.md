@@ -126,7 +126,15 @@ Ação sua, fora do código (repetida):
 - **Atualizar o Node.js da máquina para 24.21 ou mais recente.**
 
 Para a Fase 09 (observabilidade, hardening, deploy e README final):
-1. **D-11 — deploy (PENDENTE).** Opções: AWS Lightsail, VPS com Docker + Traefik, ou outra. Preciso da escolha antes de qualquer código da fase, junto com o domínio, se houver.
+1. **D-11 — deploy (PENDENTE).** O app precisa de API, web estático, PostgreSQL 17 e Redis. Preços aproximados, a confirmar na hora de contratar:
+
+   | Opção | Custo | Esforço e trade-offs |
+   |---|---|---|
+   | VPS com Docker + Traefik (Hetzner, DigitalOcean etc.) | ~US$ 5–7/mês, tudo numa máquina | O `docker-compose` vira o deploy; Traefik emite o TLS (Let's Encrypt) sozinho. Fica com você: atualizações do sistema, backup do Postgres, firewall |
+   | AWS Lightsail | ~US$ 5–10/mês a instância; Postgres gerenciado à parte (~US$ 15/mês) | Mesmo modelo da VPS se tudo rodar em containers na instância; o banco gerenciado tira o backup das suas mãos, mas encarece. Bom se você quer AWS no portfólio |
+   | Outra: PaaS (Render, Railway, Fly.io) | Gratuito a ~US$ 20/mês, dependendo de Postgres e Redis gerenciados | Menos operação (TLS, deploy por push); planos gratuitos dormem ou expiram o banco, e cada serviço é cobrado separado |
+
+   **Recomendação:** VPS com Docker + Traefik — menor custo, reaproveita o `docker-compose` que já existe. Domínio é opcional (sem ele, dá para usar um subdomínio gratuito do tipo `sslip.io`). Preciso da escolha antes de qualquer código da fase.
 
 ## 6. Dívida técnica / pontos de atenção
 - **JWT sem revogação:** logout apaga o cookie, mas um token copiado continua válido até expirar (24h). Trocar senha também não invalida tokens. Não há troca de senha nesta versão.
