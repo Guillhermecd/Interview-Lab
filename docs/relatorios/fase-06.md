@@ -24,7 +24,8 @@
   - Componentes: 41 testes (Vitest + Testing Library + jsdom).
   - E2E: 4 testes (Playwright, com o backend simulado no próprio navegador).
 - **Verificação:** `pnpm test:e2e` virou a 6ª etapa do `pnpm verify` e do CI, que agora instala o Chromium e guarda os traces do Playwright quando falha.
-- **Documentação:** D-06 e D-29 a D-31 em `DECISOES.md`; tabela de comandos em `template/RECOMENDACOES.md`; `README.md`; Fase 06 marcada `CONCLUÍDA` no `PLANO.md` (vale com o merge).
+- **Alteração na pasta protegida `template/`:** a etapa 6 (E2E) foi acrescentada à tabela de comandos de verificação em `template/RECOMENDACOES.md`, que é onde o próprio arquivo manda registrá-los. Reverto se você preferir outro lugar.
+- **Documentação:** D-06 e D-29 a D-31 em `DECISOES.md`; `README.md`; Fase 06 marcada `CONCLUÍDA` no `PLANO.md` (vale com o merge).
 
 ## 2. Por que foi feito assim
 Entregas do `PLANO.md` e como cada uma foi atendida:
@@ -47,7 +48,7 @@ Detalhes escolhidos sem pergunta:
 - **Sem roteador:** a aplicação tem uma única tela; a conversa selecionada fica no estado da página. Rotas (ex.: `/conversas/:id`) podem entrar quando houver login (Fase 08).
 - **A conversa é criada na primeira pergunta**, não ao clicar em "Nova conversa", para não gerar conversas vazias.
 - **Respostas carregadas do histórico** mostram explicação, SQL e quantidade de linhas, com o aviso de que as linhas não ficam salvas (decisão da Fase 05).
-- **Quando a primeira consulta é recusada,** a tela mostra o SQL corrigido com um aviso.
+- **Quando a primeira consulta é recusada,** a tela mostra o SQL da segunda tentativa com um aviso neutro ("abaixo, a segunda tentativa"), que vale também quando a segunda é recusada.
 - **Indicação de truncamento** quando a consulta tinha mais linhas que o limite.
 - **Paleta própria em tons de azul,** com contraste conferido visualmente nos dois temas (capturas abaixo).
 - **E2E com o backend simulado por interceptação de rede no navegador,** sem subir API nem banco, como pede o `PLANO.md`.
@@ -73,7 +74,7 @@ Testes de componentes (critério do `PLANO.md`):
 
 E2E (critério do `PLANO.md`) — Chromium, backend simulado:
 - **Fluxo principal:** pergunta → SQL → gráfico com 5 barras → tabela com 5 linhas → explicação → conversa na lista com a pergunta como título.
-- Pergunta de exemplo com SQL recusado duas vezes: erro com o motivo e o aviso de consulta corrigida.
+- Pergunta de exemplo com SQL recusado duas vezes: erro com o motivo e o aviso da segunda tentativa.
 - Abrir conversa antiga, ver o histórico e continuar.
 - Troca de tema.
 
@@ -100,6 +101,7 @@ Para a Fase 07 (revisar e editar o SQL antes de executar):
 
 ## 6. Dívida técnica / pontos de atenção
 - **A explicação da LLM pode errar números,** como no teste manual. A tabela e o gráfico vêm direto do banco e são a fonte confiável. Mitigações possíveis: instruir o modelo a citar menos números, ou a explicação apontar para a tabela. Fica registrado para avaliar com mais uso.
+- **Corrida na criação da conversa:** se o usuário escolher outra conversa enquanto a primeira pergunta ainda está criando a conversa nova, a resposta é cancelada, mas a tela volta para a conversa nova (vazia). Janela de uma ida ao servidor; nada se perde além de uma conversa sem título. Correção prevista na Fase 07, que vai mexer no mesmo trecho: conferir o cancelamento logo depois de criar a conversa, com teste.
 - **Tabela sem paginação nem ordenação:** até 1000 linhas em rolagem.
 - **Realce do SQL no tema escuro** usa as cores padrão do CodeMirror, pensadas para fundo claro; legível, mas com contraste menor nas palavras-chave.
 - **Sem roteador:** recarregar a página volta para a tela inicial (a conversa continua na lista).

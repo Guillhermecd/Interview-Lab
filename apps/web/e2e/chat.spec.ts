@@ -100,7 +100,7 @@ test('starts a question from an example and shows a refusal as an error', async 
   await expect(alert).toContainText('A consulta foi recusada pelas regras de segurança.');
   await expect(alert).toContainText('A tabela "pg_roles" não está disponível para consulta.');
   await expect(
-    page.getByText('A primeira consulta foi recusada; esta é a versão corrigida.'),
+    page.getByText('A primeira consulta foi recusada; abaixo, a segunda tentativa.'),
   ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Enviar' })).toBeVisible();
 });

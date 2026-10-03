@@ -48,7 +48,7 @@ export function AnswerCard({ answer }: AnswerCardProps) {
           <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">SQL</h3>
           {answer.sqlAttempts.length > 1 && (
             <p className="rounded-md bg-warning-surface px-2 py-1 text-xs">
-              A primeira consulta foi recusada; esta é a versão corrigida.
+              A primeira consulta foi recusada; abaixo, a segunda tentativa.
             </p>
           )}
           <SqlViewer sql={sql} />
