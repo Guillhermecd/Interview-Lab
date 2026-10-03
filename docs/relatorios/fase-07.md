@@ -92,14 +92,13 @@ Testes de componentes e E2E:
 - Edição para excluir pedidos cancelados → tabela com 5 linhas, explicação mencionando a exclusão dos cancelados, selo "Editado por você"; nenhum erro no console.
 - No banco: `status = answered`, `edited = true`, `generated_sql` com o SQL original e `sql` com o editado.
 
-Clone limpo: resultado em §4.
+Clone limpo (Node 24.21): `pnpm install --frozen-lockfile` + `pnpm verify` passaram por completo, inclusive o E2E.
 
 ## 4. Erros e problemas encontrados
 - **Processos deixados rodando na Fase 06 (correção do relatório anterior).** O relatório da Fase 06 diz que os servidores do teste manual foram parados; não foram. O comando de encerramento atingiu o processo do shell, não o do Node, e a API e o Vite daquela verificação ficaram nas portas 3000 e 5173 desde 03/10 01:52. Isso apareceu agora: a primeira tentativa do teste manual desta fase falhou porque a API antiga respondeu sem o modo revisão. Encerrei os dois processos (identificados pela linha de comando e pelo horário de início). A verificação desta fase passou a iniciar a API e o Vite como processos rastreados e a encerrá-los ao final, conferindo que as portas ficaram livres.
 - **Dois defeitos do próprio frontend, pegos pelos testes durante o desenvolvimento:**
   - O evento `review` sem um `sql` antes deixava a revisão sem SQL. Agora o SQL vem do próprio evento.
   - Depois de uma recusa, o painel de revisão reabria com o SQL recusado como se fosse o original, e "Desfazer edição" sumia. Agora o painel guarda o SQL gerado como referência e o último SQL enviado como rascunho.
-- **Clone limpo:** PREENCHER.
 
 ## 5. Decisões que preciso que você tome
 Ação sua, fora do código (repetida):
