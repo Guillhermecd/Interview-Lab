@@ -90,7 +90,9 @@ export interface Conversation {
 }
 
 export type MessageRole = 'user' | 'assistant';
-export type AssistantMessageStatus = 'answered' | 'not_answerable' | 'error';
+// pending_review: the SQL was generated in review mode and waits for the user
+// to approve or edit it before it runs (D-32).
+export type AssistantMessageStatus = 'answered' | 'not_answerable' | 'error' | 'pending_review';
 
 export interface ConversationMessage {
   id: string;
@@ -101,7 +103,25 @@ export interface ConversationMessage {
   sql?: string;
   visualization?: VisualizationSuggestion;
   rowCount?: number;
+  // True when the user changed the SQL before running it; the SQL written by
+  // the LLM is then in `generatedSql` (audit, D-33).
+  edited?: boolean;
+  generatedSql?: string;
   createdAt: string;
+}
+
+// auto: generate and run at once. review: stop after generating the SQL.
+export const ASK_MODES = ['auto', 'review'] as const;
+export type AskMode = (typeof ASK_MODES)[number];
+
+export interface AskQuestionRequest {
+  question: string;
+  mode?: AskMode;
+}
+
+export interface ExecuteReviewedSqlRequest {
+  // The SQL to run: the generated one, as is or edited by the user.
+  sql: string;
 }
 
 export interface ConversationList {
@@ -113,8 +133,9 @@ export interface MessageList {
 }
 
 // Events of the answer stream (Server-Sent Events), in the order they occur:
-// sql (once per attempt) → rows → token (many) → done. An `error` event ends
-// the stream at any point.
+// sql (once per attempt) → rows → token (many) → done. In review mode the
+// stream is sql → review, and the execution endpoint continues with
+// rows → token → done. An `error` event ends the stream at any point.
 export interface SqlStreamEvent {
   sql: string;
   attempt: number;
@@ -125,20 +146,29 @@ export interface RowsStreamEvent {
   visualization: VisualizationSuggestion;
 }
 
+// Review mode: the SQL is ready and waits for approval; nothing ran yet.
+export interface ReviewStreamEvent {
+  messageId: string;
+  sql: string;
+}
+
 export interface TokenStreamEvent {
   text: string;
 }
 
 export interface DoneStreamEvent {
   messageId: string;
-  status: Exclude<AssistantMessageStatus, 'error'>;
+  status: 'answered' | 'not_answerable';
   attempts: number;
   usage: TokenUsage;
+  // Present when a reviewed SQL was executed.
+  edited?: boolean;
 }
 
 export interface AnswerStreamEvents {
   sql: SqlStreamEvent;
   rows: RowsStreamEvent;
+  review: ReviewStreamEvent;
   token: TokenStreamEvent;
   done: DoneStreamEvent;
   error: ApiErrorBody;
