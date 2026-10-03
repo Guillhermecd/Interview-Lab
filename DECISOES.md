@@ -83,13 +83,20 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Opções:** Postgres (schema da aplicação) | Redis
 - **Trade-off:** o mesmo da D-07 — só Postgres é um serviço a menos para operar; Redis é o padrão de mercado para cache e rate limit, mas é mais um container e mais um ponto de falha.
 - **Recomendação:** Redis.
-- **Status:** PENDENTE (decidir antes da Fase 08)
+- **Status:** DECIDIDA
+- **Escolha:** Redis para rate limit e cache (contabilização de tokens fica no Postgres, que é durável)
+- **Data:** 2026-10-03
+- **Motivo:** padrão de mercado para contadores com expiração e cache com TTL.
 
 ### D-08 — Autenticação
 - **Opções:** JWT próprio simples | provedor externo | sem auth (usuário fixo)
 - **Observação:** "tokens por usuário" e "rate limit por usuário" exigem identidade.
 - **Recomendação:** JWT próprio simples (cadastro/login), sem OAuth nesta versão.
-- **Status:** PENDENTE
+- **Status:** DECIDIDA
+- **Escolha:** JWT próprio (cadastro, login, logout), sem OAuth, guardado em **cookie HttpOnly** (`SameSite=Strict`, `Secure` em produção) com verificação de origem nas requisições que alteram dados (proteção contra CSRF)
+- **Data:** 2026-10-03
+- **Motivo:** o JavaScript da página não lê o token, então um XSS não consegue roubá-lo.
+- **Contradição com o template registrada:** o `api-contract.md` do template guarda o token no `localStorage` e o envia no header `Authorization`. Aqui vale o cookie; o logout passa a ser uma rota da API (`POST /api/auth/logout`), que apaga o cookie.
 
 ### D-09 — Ferramentas de teste
 - **Opções:** Vitest | Jest; Testcontainers para Postgres; Playwright para E2E
@@ -285,3 +292,31 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Escolha:** `POST /conversations/:id/messages` aceita `mode: "review"`: o stream envia o SQL e termina com o evento `review` (`messageId`, `sql`), sem executar. `POST /conversations/:id/messages/:messageId/execute` recebe o SQL (original ou editado) e responde no mesmo formato de stream (`rows` → `token`… → `done`), passando pela mesma guarda SQL; o `done` informa se o SQL foi editado.
 - **Data:** 2026-10-03
 - **Motivo:** reaproveita o stream e o histórico; pergunta, SQL e explicação continuam ligados à mesma mensagem.
+
+### D-34 — Limites por usuário
+- **Opções:** 10/min e 200 mil tokens/dia | 5/min e 50 mil | 20/min e 500 mil
+- **Status:** DECIDIDA
+- **Escolha:** **10 perguntas por minuto** e **200 mil tokens por dia** por usuário, verificados antes de chamar a LLM; configuráveis por variável de ambiente
+- **Data:** 2026-10-03
+- **Motivo:** ~130 perguntas por dia por usuário, com ~1.500 tokens cada.
+
+### D-35 — Conversas criadas antes da autenticação
+- **Opções:** manter sem dono e invisíveis | apagar na migration (irreversível)
+- **Status:** DECIDIDA
+- **Escolha:** manter no banco, sem dono; nenhum usuário as vê
+- **Data:** 2026-10-03
+- **Motivo:** nada é apagado; podem ser atribuídas a alguém depois.
+
+### D-36 — Bibliotecas de autenticação e Redis
+- **Opções:** jose + @fastify/cookie + ioredis | jsonwebtoken + @fastify/cookie + node-redis | implementação própria
+- **Status:** DECIDIDA
+- **Escolha:**  (JWT),  (cookies),  (Redis); senhas com  do próprio Node, sem biblioteca
+- **Data:** 2026-10-03
+- **Motivo:** bibliotecas mantidas e sem dependências pesadas; nenhum código criptográfico escrito à mão.
+
+### D-37 — Implementação do rate limit
+- **Opções:** contador próprio por janela de 1 minuto | rate-limiter-flexible
+- **Status:** DECIDIDA
+- **Escolha:** contador próprio no Redis ( +  atômicos) por usuário e minuto
+- **Data:** 2026-10-03
+- **Motivo:** poucas linhas e fácil de testar. Limitação aceita: janela fixa permite até 2x o limite na virada do minuto.
