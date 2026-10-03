@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ErrorMessage } from '../../components/ui/ErrorMessage';
 import { Spinner } from '../../components/ui/Spinner';
+import { useReviewPreference } from '../../hooks/useReviewPreference';
 import { useTheme } from '../../hooks/useTheme';
 import { AnswerCard } from './AnswerCard';
 import { ConversationSidebar } from './ConversationSidebar';
@@ -16,6 +17,7 @@ const EXAMPLE_QUESTIONS = [
 
 export function ChatPage() {
   const { theme, toggleTheme } = useTheme();
+  const { review, setReview } = useReviewPreference();
   const conversationList = useConversationList();
   const [selectedId, setSelectedId] = useState<string>();
   const { refresh } = conversationList;
@@ -41,7 +43,7 @@ export function ChatPage() {
   }, [chat.items]);
 
   function ask(question: string) {
-    void chat.ask(question);
+    void chat.ask(question, review ? 'review' : 'auto');
   }
 
   return (
@@ -100,14 +102,27 @@ export function ChatPage() {
                   {item.text}
                 </p>
               ) : (
-                <AnswerCard key={item.id} answer={item} />
+                <AnswerCard
+                  key={item.id}
+                  answer={item}
+                  isBusy={chat.isAnswering}
+                  onExecuteReview={(answerId, messageId, sql) => {
+                    void chat.executeReview(answerId, messageId, sql);
+                  }}
+                />
               ),
             )}
             <div ref={endRef} />
           </div>
         </div>
 
-        <QuestionForm isAnswering={chat.isAnswering} onAsk={ask} onCancel={chat.cancel} />
+        <QuestionForm
+          isAnswering={chat.isAnswering}
+          review={review}
+          onReviewChange={setReview}
+          onAsk={ask}
+          onCancel={chat.cancel}
+        />
       </main>
     </div>
   );

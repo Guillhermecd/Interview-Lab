@@ -111,6 +111,7 @@ describe('ChatPage', () => {
     expect(screen.getByText('Quais são as regiões?', { selector: 'main p' })).toBeInTheDocument();
     expect(api.calls.find((call) => call.key === `POST ${MESSAGES_URL}`)?.body).toEqual({
       question: 'Quais são as regiões?',
+      mode: 'auto',
     });
 
     // The list is refreshed once the answer is complete, with the server's title.

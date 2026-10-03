@@ -1,12 +1,16 @@
 import { ResultChart } from '../../components/ResultChart';
 import { ResultTable } from '../../components/ResultTable';
-import { SqlViewer } from '../../components/SqlViewer';
+import { SqlEditor } from '../../components/SqlEditor';
 import { ErrorMessage } from '../../components/ui/ErrorMessage';
 import { Spinner } from '../../components/ui/Spinner';
 import type { AnswerItem } from './chat-state';
+import { ReviewPanel } from './ReviewPanel';
 
 interface AnswerCardProps {
   answer: AnswerItem;
+  // Disables actions while another answer is streaming.
+  isBusy: boolean;
+  onExecuteReview: (answerId: string, messageId: string, sql: string) => void;
 }
 
 function streamingLabel(answer: AnswerItem): string {
@@ -19,9 +23,12 @@ function streamingLabel(answer: AnswerItem): string {
   return 'Escrevendo a explicação…';
 }
 
-export function AnswerCard({ answer }: AnswerCardProps) {
+export function AnswerCard({ answer, isBusy, onExecuteReview }: AnswerCardProps) {
   const sql = answer.sqlAttempts.at(-1);
   const isStreaming = answer.status === 'streaming';
+  const { messageId, reviewSql } = answer;
+  const isReviewing =
+    answer.status === 'pending_review' && reviewSql !== undefined && messageId !== undefined;
 
   return (
     <article
@@ -43,16 +50,43 @@ export function AnswerCard({ answer }: AnswerCardProps) {
         <ErrorMessage message={answer.error.message} details={answer.error.details} />
       )}
 
-      {sql !== undefined && (
-        <section className="space-y-1">
-          <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">SQL</h3>
-          {answer.sqlAttempts.length > 1 && (
-            <p className="rounded-md bg-warning-surface px-2 py-1 text-xs">
-              A primeira consulta foi recusada; abaixo, a segunda tentativa.
-            </p>
-          )}
-          <SqlViewer sql={sql} />
-        </section>
+      {answer.sqlAttempts.length > 1 && (
+        <p className="rounded-md bg-warning-surface px-2 py-1 text-xs">
+          A primeira consulta foi recusada; abaixo, a segunda tentativa.
+        </p>
+      )}
+
+      {isReviewing ? (
+        <ReviewPanel
+          sql={reviewSql}
+          initialDraft={answer.reviewDraft ?? reviewSql}
+          disabled={isBusy}
+          onExecute={(reviewedSql) => {
+            onExecuteReview(answer.id, messageId, reviewedSql);
+          }}
+        />
+      ) : (
+        sql !== undefined && (
+          <section className="space-y-1">
+            <div className="flex items-center gap-2">
+              <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">SQL</h3>
+              {answer.edited === true && (
+                <span className="rounded-full bg-warning-surface px-2 py-0.5 text-xs">
+                  Editado por você
+                </span>
+              )}
+            </div>
+            <SqlEditor value={sql} />
+            {answer.edited === true && answer.generatedSql !== undefined && (
+              <details className="text-xs text-muted">
+                <summary className="cursor-pointer">Ver o SQL gerado originalmente</summary>
+                <div className="mt-1">
+                  <SqlEditor value={answer.generatedSql} label="SQL gerado originalmente" />
+                </div>
+              </details>
+            )}
+          </section>
+        )
       )}
 
       {answer.result && answer.visualization && (
@@ -73,7 +107,7 @@ export function AnswerCard({ answer }: AnswerCardProps) {
         </section>
       )}
 
-      {answer.fromHistory && answer.rowCount !== undefined && (
+      {answer.fromHistory && answer.status === 'answered' && answer.rowCount !== undefined && (
         <p className="text-xs text-muted">
           {answer.rowCount} {answer.rowCount === 1 ? 'linha retornada' : 'linhas retornadas'}. As
           linhas não ficam salvas no histórico; faça a pergunta de novo para vê-las.
