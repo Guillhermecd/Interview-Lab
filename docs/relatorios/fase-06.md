@@ -82,13 +82,12 @@ E2E (critério do `PLANO.md`) — Chromium, backend simulado:
 - Capturas de tela nos dois temas conferidas.
 - **A explicação da LLM citou um número errado:** "Livros 1.722.744,49" quando a tabela mostra 1.722.274,49. A tabela, que vem do banco, estava certa; o erro é do modelo ao transcrever (ver §6).
 
-Clone limpo: `pnpm install --frozen-lockfile` + `pnpm verify` — resultado em §4.
+Clone limpo (Node 24.21): `pnpm install --frozen-lockfile` + `pnpm verify` passaram por completo, inclusive o E2E.
 
 ## 4. Erros e problemas encontrados
 - **Bug encontrado pelo E2E: a primeira pergunta de uma conversa nova era cancelada pela própria tela.** Ao criar a conversa, a tela passava a selecioná-la, e a regra "trocou de conversa, cancela a resposta em andamento" abortava o stream que tinha acabado de começar. Os testes de componente não pegaram porque o `fetch` falso ignorava o cancelamento. Correção: a resposta guarda a conversa a que pertence, e selecionar essa mesma conversa não cancela nada. O `fetch` falso dos testes passou a respeitar o cancelamento; confirmei que, com o bug reintroduzido, tanto o teste de componente quanto o E2E falham.
 - **Segundo bug, achado ao reforçar o teste:** quando a resposta terminava, o cartão trocava de identificador (do provisório para o id gravado no banco) e o React recriava o cartão inteiro, com gráfico e editor sendo desenhados de novo. Agora o identificador na tela é estável e o id da mensagem fica num campo separado.
 - **Node 24.15 da máquina:** a verificação foi feita com o Node 24.21 portátil (pasta temporária) por causa da queda intermitente diagnosticada na Fase 05. Seu Node instalado continua 24.15.
-- **Clone limpo:** PREENCHER.
 - **Um falso alarme investigado:** na captura do tema escuro, o item selecionado da lista parecia claro. Medi o estilo calculado e era a transição de cor de 150 ms capturada no meio. Não é defeito.
 
 ## 5. Decisões que preciso que você tome
