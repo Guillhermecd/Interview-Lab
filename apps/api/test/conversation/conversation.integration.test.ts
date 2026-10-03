@@ -398,6 +398,15 @@ describe('conversations over HTTP', () => {
       expect(summaryPrompt).toContain('assistant: Resposta 3.');
       expect(summaryPrompt).not.toContain('Pergunta 4');
 
+      // The summary call is billed to the user like any other (Phase 08).
+      const summaryUsage = await withClient(database.admin, (client) =>
+        client.query<{ calls: number }>(
+          "SELECT calls FROM app.token_usage WHERE user_id = $1 AND kind = 'summary'",
+          [userId],
+        ),
+      );
+      expect(summaryUsage.rows).toEqual([{ calls: 1 }]);
+
       // Nothing left to summarize until 6 more messages accumulate.
       await expect
         .poll(() => service.refreshMemory(userId, conversation.id).catch(() => undefined))

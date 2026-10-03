@@ -36,9 +36,10 @@ export class UsageRepository {
       return;
     }
     await this.pool.query(
-      `INSERT INTO app.token_usage (user_id, conversation_id, kind, input_tokens, output_tokens)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [userId, conversationId ?? null, kind, usage.inputTokens, usage.outputTokens],
+      `INSERT INTO app.token_usage
+         (user_id, conversation_id, kind, input_tokens, output_tokens, calls)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [userId, conversationId ?? null, kind, usage.inputTokens, usage.outputTokens, usage.calls],
     );
   }
 
@@ -46,7 +47,7 @@ export class UsageRepository {
     const result = await this.pool.query<TotalsRow>(
       `SELECT coalesce(sum(input_tokens), 0) AS input_tokens,
               coalesce(sum(output_tokens), 0) AS output_tokens,
-              count(*) AS calls
+              coalesce(sum(calls), 0) AS calls
        FROM app.token_usage WHERE user_id = $1 AND ${TODAY}`,
       [userId],
     );

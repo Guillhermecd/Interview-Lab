@@ -25,6 +25,8 @@ CREATE TABLE app.token_usage (
   kind text NOT NULL CHECK (kind IN ('answer', 'review', 'execution', 'summary')),
   input_tokens integer NOT NULL CHECK (input_tokens >= 0),
   output_tokens integer NOT NULL CHECK (output_tokens >= 0),
+  -- LLM calls behind this record (an answer is usually two).
+  calls integer NOT NULL CHECK (calls > 0),
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX token_usage_user_created_idx ON app.token_usage (user_id, created_at);
