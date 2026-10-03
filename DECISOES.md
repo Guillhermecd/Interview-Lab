@@ -310,13 +310,13 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 ### D-36 — Bibliotecas de autenticação e Redis
 - **Opções:** jose + @fastify/cookie + ioredis | jsonwebtoken + @fastify/cookie + node-redis | implementação própria
 - **Status:** DECIDIDA
-- **Escolha:**  (JWT),  (cookies),  (Redis); senhas com  do próprio Node, sem biblioteca
+- **Escolha:** `jose` (JWT), `@fastify/cookie` (cookies), `ioredis` (Redis); senhas com `scrypt` do próprio Node, sem biblioteca
 - **Data:** 2026-10-03
 - **Motivo:** bibliotecas mantidas e sem dependências pesadas; nenhum código criptográfico escrito à mão.
 
 ### D-37 — Implementação do rate limit
 - **Opções:** contador próprio por janela de 1 minuto | rate-limiter-flexible
 - **Status:** DECIDIDA
-- **Escolha:** contador próprio no Redis ( +  atômicos) por usuário e minuto
+- **Escolha:** contador próprio no Redis (`INCR` + `EXPIRE` atômicos) por usuário e minuto
 - **Data:** 2026-10-03
 - **Motivo:** poucas linhas e fácil de testar. Limitação aceita: janela fixa permite até 2x o limite na virada do minuto.
