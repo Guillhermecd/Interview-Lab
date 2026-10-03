@@ -64,7 +64,10 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 ### D-06 — Biblioteca de gráficos
 - **Opções:** Recharts | Chart.js | ECharts
 - **Recomendação:** Recharts (declarativo, integra direto com React).
-- **Status:** PENDENTE
+- **Status:** DECIDIDA
+- **Escolha:** Recharts
+- **Data:** 2026-10-03
+- **Motivo:** componentes React declarativos; cobre barra e linha, os tipos que a API sugere.
 
 ### D-07 — Armazenamento de histórico, tokens e cache
 - **Opções:** tudo no Postgres (schema da aplicação) | Postgres + Redis para cache/rate limit
@@ -246,3 +249,25 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Escolha:** conversas sem dono até a Fase 08; os endpoints de conversa só existem com `INTERNAL_QUERY_ENDPOINT_ENABLED=true` (a mesma flag da D-22)
 - **Data:** 2026-10-02
 - **Motivo:** manter a ordem das fases (D-10). Na Fase 08 as conversas passam a ter dono e os endpoints saem de trás da flag.
+
+### D-29 — Kit de interface do frontend
+- **Opções:** Ant Design (o do template) | Tailwind CSS com componentes próprios | Mantine
+- **Status:** DECIDIDA
+- **Escolha:** Tailwind CSS com componentes próprios
+- **Data:** 2026-10-03
+- **Motivo:** escolha do Guilherme: bundle mais leve e visual livre. Custo aceito: tabela, layout e estados de tela escritos à mão.
+- **Consequência:** as regras de estilo do template que falam de Ant Design (`ConfigProvider`, `theme.ts`, "sem arquivos .css") não se aplicam; vale o equivalente com Tailwind — cores e tokens definidos uma vez como variáveis de tema, nunca hexadecimais espalhados, modo claro e escuro.
+
+### D-30 — Editor de SQL
+- **Opções:** CodeMirror 6 | Monaco | textarea simples
+- **Status:** DECIDIDA
+- **Escolha:** CodeMirror 6 (somente leitura na Fase 06, edição na Fase 07)
+- **Data:** 2026-10-03
+- **Motivo:** leve, com realce de SQL no dialeto PostgreSQL.
+
+### D-31 — Testes do frontend
+- **Opções:** componentes + E2E | só componentes
+- **Status:** DECIDIDA
+- **Escolha:** Vitest + Testing Library (jsdom) para componentes; Playwright para o E2E do fluxo principal com o backend simulado
+- **Data:** 2026-10-03
+- **Motivo:** cumpre a verificação do `PLANO.md`, dentro da D-09.
