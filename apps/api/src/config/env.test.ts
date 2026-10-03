@@ -7,6 +7,7 @@ const REQUIRED_ENV = {
   DB_NAME: 'interview_lab',
   DB_READONLY_PASSWORD: 'readonly-secret',
   DB_APP_PASSWORD: 'app-secret',
+  JWT_SECRET: 'a-development-secret-with-32-characters',
 };
 
 describe('loadEnv', () => {
@@ -38,6 +39,20 @@ describe('loadEnv', () => {
         model: 'gemini-3.5-flash-lite',
         timeoutMs: 30_000,
         explainMaxRows: 50,
+      },
+      auth: {
+        jwtSecret: 'a-development-secret-with-32-characters',
+        jwtExpiresInSeconds: 86_400,
+        secureCookies: false,
+        allowedOrigins: ['http://localhost:5173'],
+      },
+      redis: { url: 'redis://localhost:6379' },
+      limits: {
+        questionsPerMinute: 10,
+        dailyTokenQuota: 200_000,
+        loginAttemptsPerMinute: 5,
+        sqlCacheTtlSeconds: 3600,
+        resultCacheTtlSeconds: 300,
       },
     });
   });
@@ -121,5 +136,55 @@ describe('loadEnv', () => {
 
   it('never asks for admin credentials', () => {
     expect(() => loadEnv(REQUIRED_ENV)).not.toThrow();
+  });
+});
+
+describe('loadEnv security settings', () => {
+  it('reads the authentication, Redis and limit variables', () => {
+    const env = loadEnv({
+      ...REQUIRED_ENV,
+      JWT_EXPIRES_IN: '7200',
+      ALLOWED_ORIGINS: 'https://app.example.com, http://localhost:5173',
+      REDIS_URL: 'redis://cache:6379',
+      RATE_LIMIT_PER_MINUTE: '3',
+      DAILY_TOKEN_QUOTA: '1000',
+      LOGIN_ATTEMPTS_PER_MINUTE: '2',
+      SQL_CACHE_TTL_SECONDS: '0',
+      RESULT_CACHE_TTL_SECONDS: '60',
+    });
+
+    expect(env.auth.jwtExpiresInSeconds).toBe(7200);
+    expect(env.auth.allowedOrigins).toEqual(['https://app.example.com', 'http://localhost:5173']);
+    expect(env.redis.url).toBe('redis://cache:6379');
+    expect(env.limits).toEqual({
+      questionsPerMinute: 3,
+      dailyTokenQuota: 1000,
+      loginAttemptsPerMinute: 2,
+      sqlCacheTtlSeconds: 0,
+      resultCacheTtlSeconds: 60,
+    });
+  });
+
+  it('requires a JWT secret of at least 32 characters', () => {
+    expect(() => loadEnv({ ...REQUIRED_ENV, JWT_SECRET: '' })).toThrow(InvalidEnvError);
+    expect(() => loadEnv({ ...REQUIRED_ENV, JWT_SECRET: 'too-short' })).toThrow(InvalidEnvError);
+  });
+
+  it('refuses the example secret in production, but accepts it in development', () => {
+    const example = 'change-me-to-a-long-random-secret-of-at-least-32-characters';
+
+    expect(() => loadEnv({ ...REQUIRED_ENV, JWT_SECRET: example })).not.toThrow();
+    expect(() => loadEnv({ ...REQUIRED_ENV, JWT_SECRET: example, NODE_ENV: 'production' })).toThrow(
+      InvalidEnvError,
+    );
+  });
+
+  it('uses secure cookies only in production', () => {
+    expect(loadEnv(REQUIRED_ENV).auth.secureCookies).toBe(false);
+    expect(loadEnv({ ...REQUIRED_ENV, NODE_ENV: 'production' }).auth.secureCookies).toBe(true);
+  });
+
+  it('rejects an empty list of allowed origins', () => {
+    expect(() => loadEnv({ ...REQUIRED_ENV, ALLOWED_ORIGINS: ' , ' })).toThrow(InvalidEnvError);
   });
 });

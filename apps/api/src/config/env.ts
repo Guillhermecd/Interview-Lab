@@ -1,4 +1,12 @@
 import { InvalidEnvError, parseBoolean, parseInteger, requireValue } from './env-parsers.js';
+import {
+  loadAuthEnv,
+  loadLimitsEnv,
+  loadRedisEnv,
+  type AuthEnv,
+  type LimitsEnv,
+  type RedisEnv,
+} from './security-env.js';
 
 const MIN_PORT = 1;
 const MAX_PORT = 65_535;
@@ -67,6 +75,9 @@ export interface AppEnv {
   appDatabase: AppDatabaseEnv;
   query: QueryEnv;
   llm: LlmEnv;
+  auth: AuthEnv;
+  redis: RedisEnv;
+  limits: LimitsEnv;
 }
 
 export function loadDatabaseConnectionEnv(source: NodeJS.ProcessEnv): DatabaseConnectionEnv {
@@ -149,5 +160,8 @@ export function loadEnv(source: NodeJS.ProcessEnv): AppEnv {
     },
     query: loadQueryEnv(source),
     llm: loadLlmEnv(source),
+    auth: loadAuthEnv(source),
+    redis: loadRedisEnv(source),
+    limits: loadLimitsEnv(source),
   };
 }
