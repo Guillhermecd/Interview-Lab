@@ -1,4 +1,9 @@
-import { ASK_MODES, type AskMode } from '@interview-lab/shared';
+import {
+  ASK_MODES,
+  type AskMode,
+  type LoginRequest,
+  type RegisterRequest,
+} from '@interview-lab/shared';
 import { ValidationError } from './validation-error.js';
 
 export const MAX_SQL_LENGTH = 10_000;
@@ -49,4 +54,51 @@ export function readAskMode(body: unknown): AskMode {
     throw invalid('mode', 'O modo deve ser "auto" ou "review".');
   }
   return known;
+}
+
+const MAX_NAME_LENGTH = 100;
+const MAX_EMAIL_LENGTH = 254;
+const MIN_PASSWORD_LENGTH = 8;
+const MAX_PASSWORD_LENGTH = 128;
+// Deliberately simple: something@something.something. Ownership of the address
+// is not verified in this version.
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function readEmail(body: unknown): string {
+  const email = field(body, 'email');
+  if (typeof email !== 'string' || email.length > MAX_EMAIL_LENGTH) {
+    throw invalid('email', 'Informe um e-mail válido.');
+  }
+  const normalized = email.trim().toLowerCase();
+  if (!EMAIL_PATTERN.test(normalized)) {
+    throw invalid('email', 'Informe um e-mail válido.');
+  }
+  return normalized;
+}
+
+export function readRegistration(body: unknown): RegisterRequest {
+  const name = field(body, 'name');
+  if (typeof name !== 'string' || name.trim() === '' || name.length > MAX_NAME_LENGTH) {
+    throw invalid('name', `Informe um nome com até ${String(MAX_NAME_LENGTH)} caracteres.`);
+  }
+  const password = field(body, 'password');
+  if (
+    typeof password !== 'string' ||
+    password.length < MIN_PASSWORD_LENGTH ||
+    password.length > MAX_PASSWORD_LENGTH
+  ) {
+    throw invalid(
+      'password',
+      `A senha deve ter entre ${String(MIN_PASSWORD_LENGTH)} e ${String(MAX_PASSWORD_LENGTH)} caracteres.`,
+    );
+  }
+  return { name: name.trim(), email: readEmail(body), password };
+}
+
+export function readLogin(body: unknown): LoginRequest {
+  const password = field(body, 'password');
+  if (typeof password !== 'string' || password === '' || password.length > MAX_PASSWORD_LENGTH) {
+    throw invalid('password', 'Informe a senha.');
+  }
+  return { email: readEmail(body), password };
 }
