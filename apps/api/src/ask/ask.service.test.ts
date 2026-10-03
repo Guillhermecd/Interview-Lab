@@ -1,4 +1,4 @@
-import type { AskResponse, QueryResult } from '@interview-lab/shared';
+import type { QueryResult } from '@interview-lab/shared';
 import { describe, expect, it } from 'vitest';
 import {
   refusalAnswer,
@@ -38,9 +38,11 @@ const QUESTION = 'Quantos pedidos por região?';
 
 type RunOutcome = QueryResult | Error;
 
-// Answers each run() with the next outcome and records what it received.
+// Answers each run() or check() with the next outcome and records what it
+// received. check() only uses the outcome to decide whether to throw.
 class FakeQueries {
   readonly executed: string[] = [];
+  readonly checked: string[] = [];
   readonly signals: (AbortSignal | undefined)[] = [];
 
   constructor(private readonly outcomes: RunOutcome[]) {}
@@ -54,6 +56,14 @@ class FakeQueries {
     }
     return outcome instanceof Error ? Promise.reject(outcome) : Promise.resolve(outcome);
   }
+
+  check(sql: string): void {
+    this.checked.push(sql);
+    const outcome = this.outcomes.shift();
+    if (outcome instanceof Error) {
+      throw outcome;
+    }
+  }
 }
 
 function setup(jsonAnswers: unknown[], texts: (string | Error)[], outcomes: RunOutcome[]) {
@@ -66,9 +76,9 @@ function setup(jsonAnswers: unknown[], texts: (string | Error)[], outcomes: RunO
   return { provider, queries, service };
 }
 
-async function collect(
-  stream: AsyncGenerator<AskEvent, AskResponse>,
-): Promise<{ events: AskEvent[]; answer: AskResponse }> {
+async function collect<T>(
+  stream: AsyncGenerator<AskEvent, T>,
+): Promise<{ events: AskEvent[]; answer: T }> {
   const events: AskEvent[] = [];
   for (;;) {
     const step = await stream.next();
@@ -321,5 +331,104 @@ describe('AskService', () => {
     await expect(drain).rejects.toMatchObject({ code: 'LLM_CANCELLED' });
     expect(seen.filter((event) => event.type === 'token')).toHaveLength(1);
     expect(provider.streamAborted).toBe(true);
+  });
+});
+
+describe('AskService review mode', () => {
+  it('generates and checks the SQL without running it', async () => {
+    const { service, queries } = setup(
+      [sqlAnswer('SELECT regiao, pedidos FROM x', 'bar', 'regiao', 'pedidos')],
+      [],
+      [RESULT],
+    );
+
+    const { events, answer } = await collect(service.streamReview({ question: QUESTION }));
+
+    expect(events).toEqual([{ type: 'sql', sql: 'SELECT regiao, pedidos FROM x', attempt: 1 }]);
+    expect(answer).toEqual({
+      status: 'pending_review',
+      question: QUESTION,
+      sql: 'SELECT regiao, pedidos FROM x',
+      proposedVisualization: { type: 'bar', xColumn: 'regiao', yColumn: 'pedidos' },
+      attempts: 1,
+      usage: { inputTokens: 100, outputTokens: 20, calls: 1 },
+    });
+    expect(queries.checked).toEqual(['SELECT regiao, pedidos FROM x']);
+    expect(queries.executed).toEqual([]);
+  });
+
+  it('asks for a new SQL when the guard refuses the first one', async () => {
+    const { service, provider, queries } = setup(
+      [sqlAnswer('SELECT * FROM pg_roles'), sqlAnswer('SELECT 1')],
+      [],
+      [rejected('A tabela "pg_roles" não está disponível.'), RESULT],
+    );
+
+    const { answer } = await collect(service.streamReview({ question: QUESTION }));
+
+    expect(answer).toMatchObject({ status: 'pending_review', sql: 'SELECT 1', attempts: 2 });
+    expect(provider.requests[1]?.prompt).toContain('A tabela "pg_roles" não está disponível.');
+    expect(queries.executed).toEqual([]);
+  });
+
+  it('returns the refusal when the question cannot be answered', async () => {
+    const { service } = setup([refusalAnswer('Não há dados de estoque.')], [], []);
+
+    const { answer } = await collect(service.streamReview({ question: QUESTION }));
+
+    expect(answer).toMatchObject({ status: 'not_answerable', reason: 'Não há dados de estoque.' });
+  });
+
+  it('runs the reviewed SQL and explains it', async () => {
+    const { service, queries } = setup([], ['O Sul lidera.'], [RESULT]);
+
+    const { events, answer } = await collect(
+      service.streamReviewedExecution({
+        question: QUESTION,
+        sql: 'SELECT regiao, pedidos FROM y',
+        proposedVisualization: { type: 'bar', xColumn: 'regiao', yColumn: 'pedidos' },
+      }),
+    );
+
+    expect(events.map((event) => event.type)).toEqual(['rows', 'token', 'token', 'token']);
+    expect(answer).toMatchObject({
+      status: 'answered',
+      sql: 'SELECT regiao, pedidos FROM y',
+      explanation: 'O Sul lidera.',
+      visualization: { type: 'bar', xColumn: 'regiao', yColumn: 'pedidos' },
+      attempts: 1,
+      usage: { calls: 1 },
+    });
+    expect(queries.executed).toEqual(['SELECT regiao, pedidos FROM y']);
+  });
+
+  it('falls back to a table when the edited SQL no longer has the proposed columns', async () => {
+    const { service } = setup([], ['Ok.'], [RESULT]);
+
+    const { answer } = await collect(
+      service.streamReviewedExecution({
+        question: QUESTION,
+        sql: 'SELECT outra_coluna FROM y',
+        proposedVisualization: { type: 'bar', xColumn: 'categoria', yColumn: 'total' },
+      }),
+    );
+
+    expect(answer.visualization).toEqual({ type: 'table' });
+  });
+
+  it('does not retry nor ask the LLM when the reviewed SQL is refused', async () => {
+    const { service, provider } = setup([], ['nunca'], [rejected('Apenas SELECT.')]);
+
+    await expect(
+      collect(
+        service.streamReviewedExecution({
+          question: QUESTION,
+          sql: 'DELETE FROM regions',
+          proposedVisualization: { type: '', xColumn: '', yColumn: '' },
+        }),
+      ),
+    ).rejects.toMatchObject({ code: 'QUERY_REJECTED' });
+    expect(provider.requests).toHaveLength(0);
+    expect(provider.textRequests).toHaveLength(0);
   });
 });
