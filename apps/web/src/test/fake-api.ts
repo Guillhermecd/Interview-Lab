@@ -17,11 +17,35 @@ export function sseBody(events: StreamEvent[]): string {
     .join('');
 }
 
-export function sseResponse(events: StreamEvent[]): Response {
-  return new Response(sseBody(events), {
-    status: 200,
-    headers: { 'content-type': 'text/event-stream' },
+function abortError(): DOMException {
+  return new DOMException('The operation was aborted.', 'AbortError');
+}
+
+// Delivers the events a moment after the request, like a real stream, and
+// fails with AbortError if the request is aborted before that — so a test
+// notices when the screen cancels an answer it should have kept.
+export function sseResponse(events: StreamEvent[], signal?: AbortSignal | null): Response {
+  const encoder = new TextEncoder();
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      let settled = false;
+      signal?.addEventListener('abort', () => {
+        if (!settled) {
+          settled = true;
+          controller.error(abortError());
+        }
+      });
+      setTimeout(() => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        controller.enqueue(encoder.encode(sseBody(events)));
+        controller.close();
+      }, 20);
+    },
   });
+  return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } });
 }
 
 // A stream that sends the given events and then stays open until the request

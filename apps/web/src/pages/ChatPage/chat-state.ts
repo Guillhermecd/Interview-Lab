@@ -24,7 +24,10 @@ export interface AnswerError {
 
 export interface AnswerItem {
   kind: 'answer';
+  // Stable for the lifetime of the item on screen.
   id: string;
+  // Id of the stored message, known once the answer is complete.
+  messageId?: string;
   status: AnswerStatus;
   // One entry per attempt, in order; the last one is the SQL that ran.
   sqlAttempts: string[];
@@ -64,7 +67,7 @@ export function applyAnswerEvent(answer: AnswerItem, event: AnswerEvent): Answer
     case 'token':
       return { ...answer, explanation: answer.explanation + event.data.text };
     case 'done':
-      return { ...answer, id: event.data.messageId, status: event.data.status };
+      return { ...answer, messageId: event.data.messageId, status: event.data.status };
     case 'error':
       return {
         ...answer,
@@ -78,6 +81,7 @@ function fromAssistantMessage(message: ConversationMessage): AnswerItem {
   const item: AnswerItem = {
     kind: 'answer',
     id: message.id,
+    messageId: message.id,
     status: message.status ?? 'answered',
     sqlAttempts: message.sql === undefined ? [] : [message.sql],
     explanation: message.status === 'error' ? '' : message.content,

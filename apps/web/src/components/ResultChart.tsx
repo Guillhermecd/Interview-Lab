@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { formatCell, toChartNumber } from '../utils/format';
+import { formatAxisNumber, formatCell, toChartNumber } from '../utils/format';
 
 interface ResultChartProps {
   result: QueryResult;
@@ -52,8 +52,8 @@ export function ResultChart({ result, visualization, size }: ResultChartProps) {
   const axes = [
     <CartesianGrid key="grid" strokeDasharray="3 3" stroke="var(--border)" />,
     <XAxis key="x" dataKey="label" stroke={AXIS_COLOR} fontSize={12} />,
-    <YAxis key="y" stroke={AXIS_COLOR} fontSize={12} width={80} />,
-    <Tooltip key="tooltip" />,
+    <YAxis key="y" stroke={AXIS_COLOR} fontSize={12} width={80} tickFormatter={formatAxisNumber} />,
+    <Tooltip key="tooltip" formatter={(value) => formatCell(value, 'numeric')} />,
   ];
   const chart =
     visualization.type === 'bar' ? (

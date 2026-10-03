@@ -46,6 +46,8 @@ export function useChat(
   const [loaded, setLoaded] = useState<LoadedChat>({ conversationId: undefined, items: [] });
   const [isAnswering, setIsAnswering] = useState(false);
   const abortRef = useRef<AbortController | undefined>(undefined);
+  // The conversation the answer in progress belongs to.
+  const streamingForRef = useRef<string | undefined>(undefined);
 
   const isCurrent = loaded.conversationId === conversationId;
 
@@ -70,12 +72,19 @@ export function useChat(
     };
   }, [conversationId, loaded.conversationId]);
 
-  // Leaving a conversation stops the answer being streamed into it.
+  // Leaving a conversation stops the answer being streamed into it. Selecting
+  // the conversation that the answer itself just created is not leaving it.
+  useEffect(() => {
+    if (abortRef.current && streamingForRef.current !== conversationId) {
+      abortRef.current.abort();
+    }
+  }, [conversationId]);
+
   useEffect(
     () => () => {
       abortRef.current?.abort();
     },
-    [conversationId],
+    [],
   );
 
   const updateAnswer = useCallback(
@@ -104,25 +113,22 @@ export function useChat(
       setIsAnswering(true);
       const abort = new AbortController();
       abortRef.current = abort;
+      streamingForRef.current = conversationId;
 
       try {
         let targetId = conversationId;
         if (targetId === undefined) {
           const created = (await ConversationService.create()).id;
           targetId = created;
+          streamingForRef.current = created;
           // The new conversation already shows this question: its (empty)
           // history must not be loaded over it.
           setLoaded((current) => ({ ...current, conversationId: created }));
           onConversationCreated(created);
         }
 
-        let currentId = answerId;
         for await (const event of ConversationService.ask(targetId, question, abort.signal)) {
-          const idBefore = currentId;
-          if (event.event === 'done') {
-            currentId = event.data.messageId;
-          }
-          updateAnswer(idBefore, (answer) => applyAnswerEvent(answer, event));
+          updateAnswer(answerId, (answer) => applyAnswerEvent(answer, event));
         }
       } catch (error) {
         if (isAbort(error)) {

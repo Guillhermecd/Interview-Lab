@@ -33,7 +33,8 @@ describe('applyAnswerEvent', () => {
 
     expect(answer).toEqual({
       kind: 'answer',
-      id: '42',
+      id: 'local-1',
+      messageId: '42',
       status: 'answered',
       sqlAttempts: ['SELECT bad', 'SELECT good'],
       result: RESULT,
@@ -93,6 +94,7 @@ describe('itemsFromMessages', () => {
       {
         kind: 'answer',
         id: '2',
+        messageId: '2',
         status: 'answered',
         sqlAttempts: ['SELECT name FROM regions'],
         explanation: 'São cinco.',
@@ -104,6 +106,7 @@ describe('itemsFromMessages', () => {
       {
         kind: 'answer',
         id: '4',
+        messageId: '4',
         status: 'error',
         sqlAttempts: [],
         explanation: '',

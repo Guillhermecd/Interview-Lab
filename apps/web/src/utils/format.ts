@@ -12,6 +12,10 @@ const NUMERIC_TYPES: ReadonlySet<string> = new Set([
 
 const LOCALE = 'pt-BR';
 const numberFormat = new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 2 });
+const compactNumberFormat = new Intl.NumberFormat(LOCALE, {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+});
 const dateTimeFormat = new Intl.DateTimeFormat(LOCALE, {
   dateStyle: 'short',
   timeStyle: 'short',
@@ -41,6 +45,11 @@ export function formatCell(value: unknown, type: string): string {
     return String(value);
   }
   return JSON.stringify(value);
+}
+
+// Short form for chart axes: 45000000 becomes "45 mi".
+export function formatAxisNumber(value: number): string {
+  return compactNumberFormat.format(value);
 }
 
 // Chart axes need numbers; a value that is not a number is left out of the chart.

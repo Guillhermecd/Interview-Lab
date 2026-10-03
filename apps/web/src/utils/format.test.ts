@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatCell, toChartNumber } from './format';
+import { formatAxisNumber, formatCell, toChartNumber } from './format';
 
 describe('formatCell', () => {
   it.each([
@@ -33,6 +33,15 @@ describe('formatCell', () => {
   it('shows booleans and structured values as text', () => {
     expect(formatCell(true, 'bool')).toBe('true');
     expect(formatCell({ a: 1 }, 'unknown')).toBe('{"a":1}');
+  });
+});
+
+describe('formatAxisNumber', () => {
+  it('abbreviates large numbers for chart axes', () => {
+    // Intl separates number and unit with a non-breaking space.
+    expect(formatAxisNumber(45_000_000).replace(/\s/gu, ' ')).toBe('45 mi');
+    expect(formatAxisNumber(1500).replace(/\s/gu, ' ')).toBe('1,5 mil');
+    expect(formatAxisNumber(12)).toBe('12');
   });
 });
 

@@ -93,7 +93,7 @@ describe('ChatPage', () => {
         listed = [CONVERSATION];
         return jsonResponse({ ...CONVERSATION, title: null }, 201);
       })
-      .on(`POST ${MESSAGES_URL}`, () => sseResponse(ANSWER));
+      .on(`POST ${MESSAGES_URL}`, (init) => sseResponse(ANSWER, init.signal));
     render(<ChatPage />);
     await screen.findByText('Nenhuma conversa ainda.');
 
