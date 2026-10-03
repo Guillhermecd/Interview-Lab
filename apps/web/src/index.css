@@ -1,0 +1,61 @@
+@import 'tailwindcss';
+
+/* Dark mode follows the "dark" class on <html>, set by useTheme. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Theme tokens (D-29). Components use these names (bg-surface, text-muted...)
+ * and never raw colors, so light and dark mode are defined only here.
+ */
+:root {
+  --surface: #ffffff;
+  --surface-muted: #f4f6f8;
+  --surface-sunken: #eef1f4;
+  --border: #d9dee4;
+  --text: #1b2430;
+  --text-muted: #5b6776;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-text: #ffffff;
+  --danger: #b42318;
+  --danger-surface: #fdecea;
+  --warning-surface: #fff6e0;
+  --chart-1: #2563eb;
+}
+
+.dark {
+  --surface: #161b22;
+  --surface-muted: #1f252e;
+  --surface-sunken: #0f1318;
+  --border: #303844;
+  --text: #e6eaef;
+  --text-muted: #9aa5b3;
+  --primary: #5b8def;
+  --primary-hover: #7aa3f3;
+  --primary-text: #0f1318;
+  --danger: #f28b82;
+  --danger-surface: #3a1f1f;
+  --warning-surface: #3a311a;
+  --chart-1: #7aa3f3;
+}
+
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-muted: var(--text-muted);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-on-primary: var(--primary-text);
+  --color-danger: var(--danger);
+  --color-danger-surface: var(--danger-surface);
+  --color-warning-surface: var(--warning-surface);
+  --color-chart-1: var(--chart-1);
+}
+
+body {
+  background-color: var(--surface-muted);
+  color: var(--text);
+}
