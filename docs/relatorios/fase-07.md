@@ -18,7 +18,7 @@
 - **Componente `SqlEditor`** substituiu o `SqlViewer`: somente leitura por padrão, editável quando recebe `onChange`.
 - **Correção da corrida registrada na Fase 06:** escolher outra conversa enquanto a primeira pergunta ainda cria a conversa nova não puxa mais o usuário de volta para ela.
 - **Testes:**
-  - API: unitários de 405 para 411; integração de 151 para 179.
+  - API: unitários de 405 para 416; integração de 151 para 180.
   - Web: componentes de 41 para 52; E2E de 4 para 6.
 - **Documentação:** D-32 e D-33 em `DECISOES.md`; seção "Revisar o SQL antes de executar" e rotas no `README.md`; Fase 07 marcada `CONCLUÍDA` no `PLANO.md` (vale com o merge).
 
@@ -37,7 +37,8 @@ Pontos de segurança:
 - **O frontend não é fronteira:** o servidor não confia no SQL recebido, nem no fato de ele ter vindo de uma revisão. Revalida tudo, exatamente como se a LLM tivesse acabado de gerar.
 - **O SQL mostrado para revisão já passou pela guarda uma vez:** se a LLM gerar algo recusado, ela recebe o motivo e tenta de novo antes de o usuário ver.
 - **Só executa o que está pendente:** o endpoint exige uma mensagem desta conversa com status `pending_review`; executar de novo uma revisão concluída, de outra conversa ou inexistente responde `404`.
-- **Execução simultânea da mesma revisão** responde `409`.
+- **Execução simultânea da mesma revisão:** a revisão é reservada antes de o stream começar, sem espera entre a verificação e a reserva, então só uma execução passa; a outra recebe `409`. A reserva é liberada ao fim, aconteça o que acontecer.
+- **Stream nunca fica pendurado:** depois que a resposta começou, uma exceção inesperada vira um evento `error` e a resposta é sempre encerrada. Vale para os dois endpoints de streaming.
 - **SQL do usuário recusado não gera nova tentativa da LLM:** volta para o usuário corrigir.
 
 Detalhes escolhidos sem pergunta:
@@ -55,8 +56,8 @@ Executado com `pnpm verify` em Windows 11, pnpm 12.8.1, Docker 29.1.2 e Node 24.
 |---|---|---|
 | Lint | ✅ | ESLint sem erros; Prettier sem diferenças |
 | Typecheck | ✅ | `shared`, `api`, `web` |
-| Testes unitários | ✅ | 463 passaram / 463 total (API 411, web 52) |
-| Testes de integração | ✅ | 179 passaram / 179 total |
+| Testes unitários | ✅ | 468 passaram / 468 total (API 416, web 52) |
+| Testes de integração | ✅ | 180 passaram / 180 total |
 | Build | ✅ | `shared`, `api`, `web` |
 | Testes E2E | ✅ | 6 passaram / 6 total |
 
@@ -76,7 +77,12 @@ Outros testes de integração:
 - SQL gerado recusado pela guarda é refeito antes de chegar à revisão.
 - Execução sem edição grava `edited: false`; com edição grava `edited: true` e o SQL gerado.
 - O SQL editado passa pelas regras de `LIMIT` (`LIMIT 50000` vira 1000 linhas com `truncated`).
-- `409` para execução simultânea; `404` para revisão já executada, mensagem que não está pendente, revisão de outra conversa e ids inválidos; `400` para SQL ausente, vazio, não textual ou grande demais e para modo desconhecido.
+- Duas execuções da mesma revisão enviadas ao mesmo tempo: ambas terminam e só uma executa. `404` para revisão já executada, mensagem que não está pendente, revisão de outra conversa e ids inválidos; `400` para SQL ausente, vazio, não textual ou grande demais e para modo desconhecido.
+
+Testes unitários da corrida (determinísticos, porque o teste via HTTP não consegue forçar a janela):
+- Duas reservas simultâneas da mesma revisão: só uma passa, a outra recebe `409`; depois de liberada, pode ser reservada de novo.
+- Falha inesperada no meio do stream: a resposta recebe um evento `error` genérico e é encerrada, e a reserva é liberada; se o stream nem chegar a começar, a reserva também é liberada.
+- Com o código anterior, os 5 testes falham; com a correção, passam.
 
 Testes de componentes e E2E:
 - Chave desligada por padrão e lembrada.
@@ -95,7 +101,12 @@ Testes de componentes e E2E:
 Clone limpo (Node 24.21): `pnpm install --frozen-lockfile` + `pnpm verify` passaram por completo, inclusive o E2E.
 
 ## 4. Erros e problemas encontrados
-- **Processos deixados rodando na Fase 06 (correção do relatório anterior).** O relatório da Fase 06 diz que os servidores do teste manual foram parados; não foram. O comando de encerramento atingiu o processo do shell, não o do Node, e a API e o Vite daquela verificação ficaram nas portas 3000 e 5173 desde 03/10 01:52. Isso apareceu agora: a primeira tentativa do teste manual desta fase falhou porque a API antiga respondeu sem o modo revisão. Encerrei os dois processos (identificados pela linha de comando e pelo horário de início). A verificação desta fase passou a iniciar a API e o Vite como processos rastreados e a encerrá-los ao final, conferindo que as portas ficaram livres.
+- **Processos deixados rodando pelos testes manuais das Fases 05 e 06.** O comando que eu usava para parar os servidores atingia o processo do shell, não o do Node, e eles continuaram rodando:
+  - API da Fase 05 na porta 3999, desde 02/10 19:48;
+  - API e Vite da Fase 06 nas portas 3000 e 5173, desde 03/10 01:52.
+  
+  A API da Fase 05 manteve um pool de conexões com o banco e a sua chave do Gemini no ambiente do processo durante esse tempo. O problema apareceu porque a primeira tentativa do teste manual desta fase falhou: a API antiga respondeu sem o modo revisão. Encerrei os três processos, identificados pela linha de comando, pela porta e pelo horário de início; as portas 3000, 3999, 5173 e 5174 estão livres. A partir desta fase, a API e o Vite do teste manual são iniciados como processos rastreados e encerrados ao final, com conferência das portas.
+- **Corrida na execução simultânea, achada na revisão final:** a reserva da revisão só acontecia depois de o stream começar; duas requisições quase simultâneas podiam passar pela verificação, e a segunda falharia depois do início da resposta, sem conseguir enviar o erro nem encerrar a resposta (cliente pendurado). Corrigido como descrito em §2, com testes.
 - **Dois defeitos do próprio frontend, pegos pelos testes durante o desenvolvimento:**
   - O evento `review` sem um `sql` antes deixava a revisão sem SQL. Agora o SQL vem do próprio evento.
   - Depois de uma recusa, o painel de revisão reabria com o SQL recusado como se fosse o original, e "Desfazer edição" sumia. Agora o painel guarda o SQL gerado como referência e o último SQL enviado como rascunho.
@@ -111,7 +122,7 @@ Para a Fase 08 (autenticação, tokens por usuário, rate limit, cache):
 4. **Conversas existentes:** as conversas criadas até agora não têm dono. Opções: apagar na migration, ou deixar sem dono e invisíveis para todos.
 
 ## 6. Dívida técnica / pontos de atenção
-- **Proteção contra execução simultânea só vale com uma instância da API.** Com várias instâncias, a mesma revisão poderia rodar duas vezes até uma delas gravar; a gravação final é condicional (`status = 'pending_review'`), então o histórico não fica inconsistente, só haveria uma chamada extra à LLM.
+- **A reserva contra execução simultânea só vale com uma instância da API.** Com várias instâncias, a mesma revisão poderia rodar duas vezes até uma delas gravar; a gravação final é condicional (`status = 'pending_review'`), então o histórico não fica inconsistente, só haveria uma chamada extra à LLM.
 - **Tokens da execução de uma revisão** são somados aos da geração na mesma mensagem; tokens de uma execução que falhou não são registrados (como já acontecia com respostas com erro).
 - **Sem expiração de revisões pendentes:** ficam no histórico até alguém executar.
 - **Pendentes no resumo da conversa:** uma revisão nunca executada entra no histórico enviado à LLM só com o SQL, sem explicação.
