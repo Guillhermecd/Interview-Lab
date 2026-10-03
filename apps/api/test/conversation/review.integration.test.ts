@@ -316,6 +316,26 @@ describe('review mode over HTTP', () => {
       expect(parseSseBody((await first).body).at(-1)).toMatchObject({ event: 'done' });
     });
 
+    it('runs only one of two executions sent at the same moment', async () => {
+      const { app, conversationId, messageId } = await pendingReview(
+        new ScriptedLlmProvider([sqlAnswer(GENERATED_SQL)], ['Cinco.', 'Cinco.']),
+      );
+
+      const responses = await Promise.all([
+        execute(app, conversationId, messageId, GENERATED_SQL),
+        execute(app, conversationId, messageId, GENERATED_SQL),
+      ]);
+
+      // Both requests finish (none is left hanging) and exactly one runs.
+      const outcomes = responses.map((response) =>
+        response.statusCode === 200
+          ? parseSseBody(response.body).at(-1)?.event
+          : response.statusCode,
+      );
+      expect(outcomes.filter((outcome) => outcome === 'done')).toHaveLength(1);
+      expect(outcomes.filter((outcome) => outcome === 409 || outcome === 404)).toHaveLength(1);
+    });
+
     it('answers 404 when the review was already executed', async () => {
       const { app, conversationId, messageId } = await pendingReview(
         new ScriptedLlmProvider([sqlAnswer(GENERATED_SQL)], ['Cinco.']),

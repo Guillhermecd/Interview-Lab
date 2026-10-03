@@ -157,33 +157,38 @@ export class ConversationService {
     }
   }
 
-  // Checked before the execution stream starts, so these cases get a normal
-  // HTTP error: 404 if there is no such message waiting for review, 409 if it
-  // is already being executed.
-  async getPendingReview(conversationId: string, messageId: string): Promise<PendingReview> {
+  // Reserves a pending review for one execution. Done before the execution
+  // stream starts, so these cases get a normal HTTP error: 404 if there is no
+  // such message waiting for review, 409 if it is already being executed. The
+  // caller must call releaseReview() once the execution ends, whatever happens.
+  async claimPendingReview(conversationId: string, messageId: string): Promise<PendingReview> {
     const pending = await this.repository.findPendingReview(conversationId, messageId);
     if (pending === undefined) {
       throw new NotFoundException();
     }
+    // Checked and reserved with no await in between, so two requests cannot
+    // both get through.
     if (this.executing.has(pending.messageId)) {
       throw new ConflictException();
     }
+    this.executing.add(pending.messageId);
     return pending;
   }
 
-  // Runs the SQL the user approved or edited for a pending review (D-33). The
-  // SQL goes through the guard again. If it is refused or anything fails, the
-  // message stays pending, so the user can fix the SQL and try again.
+  releaseReview(messageId: string): void {
+    this.executing.delete(messageId);
+  }
+
+  // Runs the SQL the user approved or edited for a review reserved with
+  // claimPendingReview() (D-33). The SQL goes through the guard again. If it is
+  // refused or anything fails, the message stays pending, so the user can fix
+  // the SQL and try again.
   async *executeReview(
     conversationId: string,
     pending: PendingReview,
     sql: string,
     signal: AbortSignal,
   ): AsyncGenerator<AnswerStreamEvent> {
-    if (this.executing.has(pending.messageId)) {
-      throw new ConflictException();
-    }
-    this.executing.add(pending.messageId);
     try {
       const answer = yield* forward(
         this.askService.streamReviewedExecution(
@@ -221,8 +226,6 @@ export class ConversationService {
       if (!signal.aborted) {
         yield { event: 'error', data: toErrorResponse(error, this.logger).body };
       }
-    } finally {
-      this.executing.delete(pending.messageId);
     }
   }
 

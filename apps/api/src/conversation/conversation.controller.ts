@@ -13,6 +13,7 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Conversation, ConversationList, MessageList } from '@interview-lab/shared';
+import { toErrorResponse } from '../http/error-response.js';
 import { readAskMode, readQuestion, readSql } from '../http/request-readers.js';
 import { describeErrorForLog } from '../query/query-error.js';
 import { ConversationService } from './conversation.service.js';
@@ -90,11 +91,16 @@ export class ConversationController {
     if (!UUID_PATTERN.test(id) || !MESSAGE_ID_PATTERN.test(messageId)) {
       throw new NotFoundException();
     }
-    const pending = await this.conversations.getPendingReview(id, messageId);
+    const pending = await this.conversations.claimPendingReview(id, messageId);
 
-    const completed = await this.stream(reply, (signal) =>
-      this.conversations.executeReview(id, pending, sql, signal),
-    );
+    let completed: boolean;
+    try {
+      completed = await this.stream(reply, (signal) =>
+        this.conversations.executeReview(id, pending, sql, signal),
+      );
+    } finally {
+      this.conversations.releaseReview(pending.messageId);
+    }
     if (completed) {
       await this.refreshMemory(id);
     }
@@ -102,7 +108,9 @@ export class ConversationController {
 
   // Writes the events as Server-Sent Events. Returns false if the client left
   // before the end; in that case `signal` was aborted, which stops the LLM call
-  // and the database query that nobody will read.
+  // and the database query that nobody will read. Once the response has
+  // started, an unexpected exception can no longer become an HTTP error: it is
+  // sent as an `error` event, and the response is always ended.
   private async stream(
     reply: StreamReply,
     produce: (signal: AbortSignal) => AsyncIterable<AnswerStreamEvent>,
@@ -117,10 +125,18 @@ export class ConversationController {
 
     reply.hijack();
     response.writeHead(HttpStatus.OK, SSE_HEADERS);
-    for await (const event of produce(abort.signal)) {
-      response.write(formatSseEvent(event));
+    try {
+      for await (const event of produce(abort.signal)) {
+        response.write(formatSseEvent(event));
+      }
+    } catch (error) {
+      if (!abort.signal.aborted) {
+        const { body } = toErrorResponse(error, this.logger);
+        response.write(formatSseEvent({ event: 'error', data: body }));
+      }
+    } finally {
+      response.end();
     }
-    response.end();
     return !abort.signal.aborted;
   }
 
