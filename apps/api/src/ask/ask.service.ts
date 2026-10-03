@@ -1,8 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type {
+  AnsweredQuestion,
   AskResponse,
   QueryResult,
   TokenUsage,
+  UnansweredQuestion,
   VisualizationSuggestion,
 } from '@interview-lab/shared';
 import { LlmError } from '../llm/llm-error.js';
@@ -43,6 +45,24 @@ export interface AskInput {
   context?: ConversationContext;
 }
 
+// Review mode: SQL generated and accepted by the guard, waiting for the user.
+export interface SqlForReview {
+  status: 'pending_review';
+  question: string;
+  sql: string;
+  // Checked against the real columns only when the SQL runs.
+  proposedVisualization: ProposedVisualization;
+  attempts: number;
+  usage: TokenUsage;
+}
+
+export interface ReviewedSqlInput {
+  question: string;
+  // The SQL to run: the generated one, as is or edited by the user.
+  sql: string;
+  proposedVisualization: ProposedVisualization;
+}
+
 // What happens while a question is being answered, in order.
 export type AskEvent =
   | { type: 'sql'; sql: string; attempt: number }
@@ -61,16 +81,25 @@ const RETRYABLE_ERRORS: ReadonlySet<QueryErrorCode> = new Set([
   'QUERY_DATA_ERROR',
 ]);
 
-interface Execution {
+interface Generated<T> {
   sql: string;
-  result: QueryResult;
-  visualization: VisualizationSuggestion;
+  proposedVisualization: ProposedVisualization;
   attempts: number;
+  // What the attempt function produced for the accepted SQL.
+  outcome: T;
+}
+
+interface Refusal {
+  reason: string;
 }
 
 function describeFailure(error: QueryExecutionError): string {
   const details = error.details?.map((detail) => detail.message) ?? [];
   return [error.message, ...details].join(' ');
+}
+
+function isRefusal<T>(value: Generated<T> | Refusal): value is Refusal {
+  return 'reason' in value;
 }
 
 // Makes the LLM calls of one question, counting their tokens and passing the
@@ -119,13 +148,16 @@ class MeteredLlm {
   }
 }
 
-// Question in natural language → SQL → guard → execution → explanation.
+// Question in natural language → SQL → guard → execution → explanation. In
+// review mode the flow stops after the guard and resumes, with the SQL the
+// user approved or edited, in streamReviewedExecution().
 @Injectable()
 export class AskService {
   constructor(
     @Inject(LLM_PROVIDER) private readonly provider: LlmProvider,
     @Inject(SchemaCatalog) private readonly schemaCatalog: Pick<SchemaCatalog, 'describe'>,
-    @Inject(GuardedQueryService) private readonly queries: Pick<GuardedQueryService, 'run'>,
+    @Inject(GuardedQueryService)
+    private readonly queries: Pick<GuardedQueryService, 'run' | 'check'>,
     @Inject(ASK_LIMITS) private readonly limits: AskLimits,
   ) {}
 
@@ -133,24 +165,155 @@ export class AskService {
   // the generator's return value. Aborting `signal` stops the LLM call or the
   // database query in progress.
   async *stream(input: AskInput, signal?: AbortSignal): AsyncGenerator<AskEvent, AskResponse> {
-    const { question } = input;
     const llm = new MeteredLlm(this.provider, signal);
 
-    const execution = yield* this.generateAndExecute(input, llm, signal);
-    if ('reason' in execution) {
-      yield { type: 'token', text: execution.reason };
-      return { status: 'not_answerable', question, reason: execution.reason, usage: llm.usage };
+    const generated = yield* this.generate(input, llm, (sql) => this.queries.run(sql, signal));
+    if (isRefusal(generated)) {
+      return yield* this.refuse(input.question, generated.reason, llm);
     }
 
-    yield { type: 'rows', result: execution.result, visualization: execution.visualization };
+    return yield* this.explain(
+      input.question,
+      generated.sql,
+      generated.outcome,
+      resolveVisualization(generated.proposedVisualization, generated.outcome.columns),
+      generated.attempts,
+      llm,
+    );
+  }
 
-    // Rows read from the database go to the LLM only to be described. Its
-    // answer is plain text, capped in length, and never interpreted.
+  // Review mode: generates the SQL and checks it with the guard, without
+  // running it. The SQL shown to the user has already passed the guard once.
+  async *streamReview(
+    input: AskInput,
+    signal?: AbortSignal,
+  ): AsyncGenerator<AskEvent, SqlForReview | UnansweredQuestion> {
+    const llm = new MeteredLlm(this.provider, signal);
+
+    const generated = yield* this.generate(input, llm, (sql) => {
+      this.queries.check(sql);
+      return Promise.resolve();
+    });
+    if (isRefusal(generated)) {
+      return yield* this.refuse(input.question, generated.reason, llm);
+    }
+
+    return {
+      status: 'pending_review',
+      question: input.question,
+      sql: generated.sql,
+      proposedVisualization: generated.proposedVisualization,
+      attempts: generated.attempts,
+      usage: llm.usage,
+    };
+  }
+
+  // Runs the SQL approved or edited by the user and explains it. The SQL goes
+  // through the guard again: what the user sends is never trusted (rule 2).
+  // There is no new attempt: a refused SQL goes back to the user.
+  async *streamReviewedExecution(
+    input: ReviewedSqlInput,
+    signal?: AbortSignal,
+  ): AsyncGenerator<AskEvent, AnsweredQuestion> {
+    const llm = new MeteredLlm(this.provider, signal);
+    const result = await this.queries.run(input.sql, signal);
+
+    return yield* this.explain(
+      input.question,
+      input.sql,
+      result,
+      resolveVisualization(input.proposedVisualization, result.columns),
+      1,
+      llm,
+    );
+  }
+
+  // Same as stream(), for callers that only want the final answer.
+  async ask(question: string): Promise<AskResponse> {
+    const events = this.stream({ question });
+    for (;;) {
+      const step = await events.next();
+      if (step.done === true) {
+        return step.value;
+      }
+    }
+  }
+
+  // Asks the LLM for SQL and hands it to `attempt` (run it, or only check it).
+  // If the SQL is refused because of its text, the LLM gets one more try with
+  // the reason.
+  private async *generate<T>(
+    input: AskInput,
+    llm: MeteredLlm,
+    attempt: (sql: string) => Promise<T>,
+  ): AsyncGenerator<AskEvent, Generated<T> | Refusal> {
+    const schema = await this.schemaCatalog.describe();
+    let previous: FailedAttempt | undefined;
+
+    for (let attemptNumber = 1; ; attemptNumber += 1) {
+      const generation = parseSqlGeneration(
+        await llm.generateJson(
+          buildSqlRequest({
+            question: input.question,
+            schema,
+            maxRows: this.limits.maxRows,
+            ...(input.context && { context: input.context }),
+            ...(previous && { previous }),
+          }),
+        ),
+      );
+      if (generation.kind === 'refusal') {
+        return { reason: generation.reason };
+      }
+
+      yield { type: 'sql', sql: generation.sql, attempt: attemptNumber };
+
+      try {
+        return {
+          sql: generation.sql,
+          proposedVisualization: generation.visualization,
+          attempts: attemptNumber,
+          outcome: await attempt(generation.sql),
+        };
+      } catch (error) {
+        const retryable =
+          error instanceof QueryExecutionError &&
+          RETRYABLE_ERRORS.has(error.code) &&
+          attemptNumber < MAX_SQL_ATTEMPTS;
+        if (!retryable) {
+          throw error;
+        }
+        previous = { sql: generation.sql, error: describeFailure(error) };
+      }
+    }
+  }
+
+  private *refuse(
+    question: string,
+    reason: string,
+    llm: MeteredLlm,
+  ): Generator<AskEvent, UnansweredQuestion> {
+    yield { type: 'token', text: reason };
+    return { status: 'not_answerable', question, reason, usage: llm.usage };
+  }
+
+  // Rows read from the database go to the LLM only to be described. Its answer
+  // is plain text, capped in length, and never interpreted.
+  private async *explain(
+    question: string,
+    sql: string,
+    result: QueryResult,
+    visualization: VisualizationSuggestion,
+    attempts: number,
+    llm: MeteredLlm,
+  ): AsyncGenerator<AskEvent, AnsweredQuestion> {
+    yield { type: 'rows', result, visualization };
+
     let explanation = '';
     const request = buildExplanationRequest({
       question,
-      sql: execution.sql,
-      result: execution.result,
+      sql,
+      result,
       maxRows: this.limits.explainMaxRows,
     });
     for await (const text of llm.streamText(request)) {
@@ -167,81 +330,12 @@ export class AskService {
     return {
       status: 'answered',
       question,
-      sql: execution.sql,
-      result: execution.result,
-      explanation: explanation.trim(),
-      visualization: execution.visualization,
-      attempts: execution.attempts,
-      usage: llm.usage,
-    };
-  }
-
-  // Same as stream(), for callers that only want the final answer.
-  async ask(question: string): Promise<AskResponse> {
-    const events = this.stream({ question });
-    for (;;) {
-      const step = await events.next();
-      if (step.done === true) {
-        return step.value;
-      }
-    }
-  }
-
-  private async *generateAndExecute(
-    input: AskInput,
-    llm: MeteredLlm,
-    signal: AbortSignal | undefined,
-  ): AsyncGenerator<AskEvent, Execution | { reason: string }> {
-    const schema = await this.schemaCatalog.describe();
-    let previous: FailedAttempt | undefined;
-
-    for (let attempt = 1; ; attempt += 1) {
-      const generation = parseSqlGeneration(
-        await llm.generateJson(
-          buildSqlRequest({
-            question: input.question,
-            schema,
-            maxRows: this.limits.maxRows,
-            ...(input.context && { context: input.context }),
-            ...(previous && { previous }),
-          }),
-        ),
-      );
-      if (generation.kind === 'refusal') {
-        return { reason: generation.reason };
-      }
-
-      yield { type: 'sql', sql: generation.sql, attempt };
-
-      try {
-        return await this.execute(generation.sql, generation.visualization, attempt, signal);
-      } catch (error) {
-        const retryable =
-          error instanceof QueryExecutionError &&
-          RETRYABLE_ERRORS.has(error.code) &&
-          attempt < MAX_SQL_ATTEMPTS;
-        if (!retryable) {
-          throw error;
-        }
-        previous = { sql: generation.sql, error: describeFailure(error) };
-      }
-    }
-  }
-
-  private async execute(
-    sql: string,
-    proposed: ProposedVisualization,
-    attempts: number,
-    signal: AbortSignal | undefined,
-  ): Promise<Execution> {
-    // The guard runs inside GuardedQueryService: SQL written by the LLM is
-    // never executed without it.
-    const result = await this.queries.run(sql, signal);
-    return {
       sql,
       result,
-      visualization: resolveVisualization(proposed, result.columns),
+      explanation: explanation.trim(),
+      visualization,
       attempts,
+      usage: llm.usage,
     };
   }
 }

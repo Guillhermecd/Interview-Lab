@@ -6,11 +6,19 @@ const MAX_QUESTION_LENGTH = 1000;
 
 interface QuestionFormProps {
   isAnswering: boolean;
+  review: boolean;
+  onReviewChange: (review: boolean) => void;
   onAsk: (question: string) => void;
   onCancel: () => void;
 }
 
-export function QuestionForm({ isAnswering, onAsk, onCancel }: QuestionFormProps) {
+export function QuestionForm({
+  isAnswering,
+  review,
+  onReviewChange,
+  onAsk,
+  onCancel,
+}: QuestionFormProps) {
   const [question, setQuestion] = useState('');
   const trimmed = question.trim();
   const canSend = !isAnswering && trimmed !== '' && question.length <= MAX_QUESTION_LENGTH;
@@ -32,30 +40,43 @@ export function QuestionForm({ isAnswering, onAsk, onCancel }: QuestionFormProps
   }
 
   return (
-    <form onSubmit={submit} className="flex items-end gap-2 border-t border-border bg-surface p-3">
-      <label className="flex-1">
-        <span className="sr-only">Pergunta</span>
-        <textarea
-          value={question}
+    <form onSubmit={submit} className="space-y-2 border-t border-border bg-surface p-3">
+      <div className="flex items-end gap-2">
+        <label className="flex-1">
+          <span className="sr-only">Pergunta</span>
+          <textarea
+            value={question}
+            onChange={(event) => {
+              setQuestion(event.target.value);
+            }}
+            onKeyDown={handleKeyDown}
+            rows={2}
+            maxLength={MAX_QUESTION_LENGTH}
+            placeholder="Pergunte sobre os dados de vendas, ex.: qual o faturamento por região no último trimestre?"
+            className="w-full resize-none rounded-lg border border-border bg-surface-muted px-3 py-2 text-sm placeholder:text-muted focus:border-primary focus:outline-none"
+          />
+        </label>
+        {isAnswering ? (
+          <Button variant="secondary" onClick={onCancel}>
+            Parar
+          </Button>
+        ) : (
+          <Button type="submit" disabled={!canSend}>
+            Enviar
+          </Button>
+        )}
+      </div>
+      <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-muted">
+        <input
+          type="checkbox"
+          checked={review}
           onChange={(event) => {
-            setQuestion(event.target.value);
+            onReviewChange(event.target.checked);
           }}
-          onKeyDown={handleKeyDown}
-          rows={2}
-          maxLength={MAX_QUESTION_LENGTH}
-          placeholder="Pergunte sobre os dados de vendas, ex.: qual o faturamento por região no último trimestre?"
-          className="w-full resize-none rounded-lg border border-border bg-surface-muted px-3 py-2 text-sm placeholder:text-muted focus:border-primary focus:outline-none"
+          className="h-4 w-4 accent-primary"
         />
+        Revisar o SQL antes de executar
       </label>
-      {isAnswering ? (
-        <Button variant="secondary" onClick={onCancel}>
-          Parar
-        </Button>
-      ) : (
-        <Button type="submit" disabled={!canSend}>
-          Enviar
-        </Button>
-      )}
     </form>
   );
 }

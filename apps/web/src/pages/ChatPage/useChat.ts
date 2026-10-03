@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toApiError } from '../../api/modules/api';
-import { ConversationService } from '../../api/modules/conversation.service';
+import type { AskMode } from '@interview-lab/shared';
+import { ConversationService, type AnswerEvent } from '../../api/modules/conversation.service';
 import {
   applyAnswerEvent,
   itemsFromMessages,
   newAnswer,
+  startReviewExecution,
   type AnswerItem,
   type ChatItem,
 } from './chat-state';
@@ -14,7 +16,8 @@ interface ChatState {
   isLoadingHistory: boolean;
   historyError: string | undefined;
   isAnswering: boolean;
-  ask: (question: string) => Promise<void>;
+  ask: (question: string, mode?: AskMode) => Promise<void>;
+  executeReview: (answerId: string, messageId: string, sql: string) => Promise<void>;
   cancel: () => void;
 }
 
@@ -99,8 +102,45 @@ export function useChat(
     [],
   );
 
+  // Streams events into one answer until the stream ends. On failure the
+  // answer shows the error; on abort it is marked cancelled (or, for a review
+  // being executed, goes back to review).
+  const follow = useCallback(
+    async (answerId: string, abort: AbortController, events: () => AsyncIterable<AnswerEvent>) => {
+      setIsAnswering(true);
+      abortRef.current = abort;
+      try {
+        for await (const event of events()) {
+          updateAnswer(answerId, (answer) => applyAnswerEvent(answer, event));
+        }
+      } catch (error) {
+        if (isAbort(error)) {
+          updateAnswer(answerId, (answer) => ({
+            ...answer,
+            status: answer.executingReview === true ? 'pending_review' : 'cancelled',
+            executingReview: false,
+          }));
+        } else {
+          const apiError = toApiError(error);
+          updateAnswer(answerId, (answer) =>
+            applyAnswerEvent(answer, {
+              event: 'error',
+              data: { code: apiError.code, message: apiError.message, details: apiError.details },
+            }),
+          );
+        }
+      } finally {
+        if (abortRef.current === abort) {
+          abortRef.current = undefined;
+        }
+        setIsAnswering(false);
+      }
+    },
+    [updateAnswer],
+  );
+
   const ask = useCallback(
-    async (question: string) => {
+    async (question: string, mode: AskMode = 'auto') => {
       const answerId = localId('answer');
       const pending: ChatItem[] = [
         { kind: 'question', id: localId('question'), text: question },
@@ -110,15 +150,18 @@ export function useChat(
         conversationId,
         items: current.conversationId === conversationId ? [...current.items, ...pending] : pending,
       }));
-      setIsAnswering(true);
       const abort = new AbortController();
-      abortRef.current = abort;
       streamingForRef.current = conversationId;
 
-      try {
+      await follow(answerId, abort, async function* () {
         let targetId = conversationId;
         if (targetId === undefined) {
           const created = (await ConversationService.create()).id;
+          // The user left (or stopped) while the conversation was being created:
+          // do not pull them back to it.
+          if (abort.signal.aborted) {
+            throw new DOMException('The operation was aborted.', 'AbortError');
+          }
           targetId = created;
           streamingForRef.current = created;
           // The new conversation already shows this question: its (empty)
@@ -126,29 +169,26 @@ export function useChat(
           setLoaded((current) => ({ ...current, conversationId: created }));
           onConversationCreated(created);
         }
-
-        for await (const event of ConversationService.ask(targetId, question, abort.signal)) {
-          updateAnswer(answerId, (answer) => applyAnswerEvent(answer, event));
-        }
-      } catch (error) {
-        if (isAbort(error)) {
-          updateAnswer(answerId, (answer) => ({ ...answer, status: 'cancelled' }));
-        } else {
-          const apiError = toApiError(error);
-          updateAnswer(answerId, (answer) => ({
-            ...answer,
-            status: 'error',
-            error: { message: apiError.message, details: apiError.details },
-          }));
-        }
-      } finally {
-        if (abortRef.current === abort) {
-          abortRef.current = undefined;
-        }
-        setIsAnswering(false);
-      }
+        yield* ConversationService.ask(targetId, question, mode, abort.signal);
+      });
     },
-    [conversationId, onConversationCreated, updateAnswer],
+    [conversationId, follow, onConversationCreated],
+  );
+
+  // Sends the SQL the user approved or edited for an answer waiting for review.
+  const executeReview = useCallback(
+    async (answerId: string, messageId: string, sql: string) => {
+      if (conversationId === undefined) {
+        return;
+      }
+      updateAnswer(answerId, (answer) => startReviewExecution(answer, sql));
+      const abort = new AbortController();
+      streamingForRef.current = conversationId;
+      await follow(answerId, abort, () =>
+        ConversationService.executeReview(conversationId, messageId, sql, abort.signal),
+      );
+    },
+    [conversationId, follow, updateAnswer],
   );
 
   const cancel = useCallback(() => {
@@ -161,6 +201,7 @@ export function useChat(
     historyError: isCurrent ? loaded.historyError : undefined,
     isAnswering,
     ask,
+    executeReview,
     cancel,
   };
 }

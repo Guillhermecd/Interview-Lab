@@ -13,37 +13,20 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Conversation, ConversationList, MessageList } from '@interview-lab/shared';
-import { ValidationError } from '../http/validation-error.js';
+import { toErrorResponse } from '../http/error-response.js';
+import { readAskMode, readQuestion, readSql } from '../http/request-readers.js';
 import { describeErrorForLog } from '../query/query-error.js';
 import { ConversationService } from './conversation.service.js';
-import { formatSseEvent, SSE_HEADERS } from './sse.js';
+import { formatSseEvent, SSE_HEADERS, type AnswerStreamEvent } from './sse.js';
 
-const MAX_QUESTION_LENGTH = 1000;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MESSAGE_ID_PATTERN = /^[1-9][0-9]{0,17}$/;
 
 // The part of the Fastify reply needed to write a stream by hand.
 interface StreamReply {
   // Tells Fastify that the response is written directly on `raw`.
   hijack: () => void;
   raw: ServerResponse;
-}
-
-function readQuestion(body: unknown): string {
-  const question =
-    typeof body === 'object' && body !== null && 'question' in body ? body.question : undefined;
-
-  if (typeof question !== 'string' || question.trim() === '') {
-    throw new ValidationError([{ field: 'question', message: 'Informe a pergunta.' }]);
-  }
-  if (question.length > MAX_QUESTION_LENGTH) {
-    throw new ValidationError([
-      {
-        field: 'question',
-        message: `A pergunta pode ter no máximo ${String(MAX_QUESTION_LENGTH)} caracteres.`,
-      },
-    ]);
-  }
-  return question.trim();
 }
 
 // Internal endpoints: no authentication, rate limit or owner yet (Phase 08).
@@ -70,7 +53,8 @@ export class ConversationController {
     return { items: await this.conversations.listMessages(id) };
   }
 
-  // Answers as Server-Sent Events: sql → rows → token… → done, or error.
+  // Answers as Server-Sent Events: sql → rows → token… → done, or error. With
+  // `mode: "review"` the stream ends after the SQL with a `review` event.
   // Everything that can be refused with a normal HTTP error is checked before
   // the stream starts.
   @Post(':id/messages')
@@ -81,12 +65,58 @@ export class ConversationController {
     @Res() reply: StreamReply,
   ): Promise<void> {
     const question = readQuestion(body);
+    const mode = readAskMode(body);
     await this.assertExists(id);
 
+    const completed = await this.stream(reply, (signal) =>
+      this.conversations.answer(id, question, mode, signal),
+    );
+    if (completed) {
+      await this.refreshMemory(id);
+    }
+  }
+
+  // Runs the SQL of a message waiting for review, as approved or edited by the
+  // user (D-33): rows → token… → done, or error. The SQL goes through the guard
+  // again, exactly as if it had been generated now.
+  @Post(':id/messages/:messageId/execute')
+  @HttpCode(HttpStatus.OK)
+  async execute(
+    @Param('id') id: string,
+    @Param('messageId') messageId: string,
+    @Body() body: unknown,
+    @Res() reply: StreamReply,
+  ): Promise<void> {
+    const sql = readSql(body);
+    if (!UUID_PATTERN.test(id) || !MESSAGE_ID_PATTERN.test(messageId)) {
+      throw new NotFoundException();
+    }
+    const pending = await this.conversations.claimPendingReview(id, messageId);
+
+    let completed: boolean;
+    try {
+      completed = await this.stream(reply, (signal) =>
+        this.conversations.executeReview(id, pending, sql, signal),
+      );
+    } finally {
+      this.conversations.releaseReview(pending.messageId);
+    }
+    if (completed) {
+      await this.refreshMemory(id);
+    }
+  }
+
+  // Writes the events as Server-Sent Events. Returns false if the client left
+  // before the end; in that case `signal` was aborted, which stops the LLM call
+  // and the database query that nobody will read. Once the response has
+  // started, an unexpected exception can no longer become an HTTP error: it is
+  // sent as an `error` event, and the response is always ended.
+  private async stream(
+    reply: StreamReply,
+    produce: (signal: AbortSignal) => AsyncIterable<AnswerStreamEvent>,
+  ): Promise<boolean> {
     const response = reply.raw;
     const abort = new AbortController();
-    // "close" before the response has ended means the client went away: stop
-    // the LLM call and the database query, which nobody will read.
     response.on('close', () => {
       if (!response.writableEnded) {
         abort.abort();
@@ -95,14 +125,19 @@ export class ConversationController {
 
     reply.hijack();
     response.writeHead(HttpStatus.OK, SSE_HEADERS);
-    for await (const event of this.conversations.answer(id, question, abort.signal)) {
-      response.write(formatSseEvent(event));
+    try {
+      for await (const event of produce(abort.signal)) {
+        response.write(formatSseEvent(event));
+      }
+    } catch (error) {
+      if (!abort.signal.aborted) {
+        const { body } = toErrorResponse(error, this.logger);
+        response.write(formatSseEvent({ event: 'error', data: body }));
+      }
+    } finally {
+      response.end();
     }
-    response.end();
-
-    if (!abort.signal.aborted) {
-      await this.refreshMemory(id);
-    }
+    return !abort.signal.aborted;
   }
 
   // Runs after the answer was delivered, so the client never waits for it.

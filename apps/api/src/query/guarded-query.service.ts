@@ -22,6 +22,12 @@ export class GuardedQueryService {
     return this.executor.execute(this.validate(sql), signal);
   }
 
+  // Runs only the guard, without executing: used to check SQL that will be
+  // shown to the user for review. Throws the same errors as run().
+  check(sql: string): void {
+    this.validate(sql);
+  }
+
   private validate(sql: string): string {
     try {
       return this.guard.validate(sql).sql;

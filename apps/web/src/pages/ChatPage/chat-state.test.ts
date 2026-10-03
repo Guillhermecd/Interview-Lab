@@ -1,6 +1,6 @@
 import type { QueryResult } from '@interview-lab/shared';
 import { describe, expect, it } from 'vitest';
-import { applyAnswerEvent, itemsFromMessages, newAnswer } from './chat-state';
+import { applyAnswerEvent, itemsFromMessages, newAnswer, startReviewExecution } from './chat-state';
 
 const RESULT: QueryResult = {
   columns: [{ name: 'regiao', type: 'text' }],
@@ -42,6 +42,7 @@ describe('applyAnswerEvent', () => {
       rowCount: 1,
       explanation: 'O Sul lidera.',
       fromHistory: false,
+      executingReview: false,
     });
   });
 
@@ -114,5 +115,64 @@ describe('itemsFromMessages', () => {
         fromHistory: true,
       },
     ]);
+  });
+});
+
+describe('review mode state', () => {
+  const REVIEW_SQL = 'SELECT name FROM regions';
+
+  function pendingAnswer() {
+    return applyAnswerEvent(newAnswer('local-1'), {
+      event: 'review',
+      data: { messageId: '7', sql: REVIEW_SQL },
+    });
+  }
+
+  it('keeps the SQL to review and the message id', () => {
+    expect(pendingAnswer()).toMatchObject({
+      status: 'pending_review',
+      messageId: '7',
+      reviewSql: REVIEW_SQL,
+      sqlAttempts: [REVIEW_SQL],
+    });
+  });
+
+  it('goes back to review, keeping the draft, when the executed SQL is refused', () => {
+    const executing = startReviewExecution(pendingAnswer(), 'DELETE FROM regions');
+
+    const refused = applyAnswerEvent(executing, {
+      event: 'error',
+      data: { code: 'QUERY_REJECTED', message: 'Recusada.' },
+    });
+
+    expect(refused).toMatchObject({
+      status: 'pending_review',
+      reviewSql: REVIEW_SQL,
+      reviewDraft: 'DELETE FROM regions',
+      executingReview: false,
+      error: { message: 'Recusada.' },
+    });
+  });
+
+  it('records the generated SQL when the user edited it', () => {
+    const executing = startReviewExecution(pendingAnswer(), `${REVIEW_SQL} LIMIT 1`);
+
+    const done = applyAnswerEvent(executing, {
+      event: 'done',
+      data: {
+        messageId: '7',
+        status: 'answered',
+        attempts: 1,
+        usage: { inputTokens: 1, outputTokens: 1, calls: 1 },
+        edited: true,
+      },
+    });
+
+    expect(done).toMatchObject({
+      status: 'answered',
+      edited: true,
+      generatedSql: REVIEW_SQL,
+      sqlAttempts: [`${REVIEW_SQL} LIMIT 1`],
+    });
   });
 });

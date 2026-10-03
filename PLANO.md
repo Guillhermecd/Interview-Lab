@@ -18,7 +18,7 @@ tabela/gráfico + explicação, em streaming.
 | 04 | Integração com LLM (texto → SQL → explicação) | D-03 | CONCLUÍDA |
 | 05 | Streaming SSE, histórico e memória resumida | D-07 | CONCLUÍDA |
 | 06 | Frontend: chat, tabela, gráfico, editor SQL | D-06 | CONCLUÍDA |
-| 07 | Human-in-the-loop (revisar/editar SQL) | — | PENDENTE |
+| 07 | Human-in-the-loop (revisar/editar SQL) | — | CONCLUÍDA |
 | 08 | Autenticação, tokens por usuário, rate limit, cache | D-07b, D-08 | PENDENTE |
 | 09 | Observabilidade, hardening, deploy e README | D-11 | PENDENTE |
 

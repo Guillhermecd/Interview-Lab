@@ -8,6 +8,7 @@ import type {
   VisualizationSuggestion,
 } from '@interview-lab/shared';
 import type { Pool } from 'pg';
+import type { ProposedVisualization } from '../ask/llm-output.js';
 import { APP_POOL } from './app-pool.js';
 import type { ConversationMemory } from './conversation-memory.js';
 
@@ -18,10 +19,29 @@ export interface AssistantMessageInput {
   content: string;
   status: AssistantMessageStatus;
   sql?: string;
-  visualization?: VisualizationSuggestion;
+  // A validated suggestion for answered messages; the LLM's raw proposal for
+  // messages waiting for review.
+  visualization?: VisualizationSuggestion | ProposedVisualization;
   rowCount?: number;
   attempts?: number;
   usage?: TokenUsage;
+}
+
+export interface ReviewedAnswerInput {
+  content: string;
+  executedSql: string;
+  edited: boolean;
+  visualization: VisualizationSuggestion;
+  rowCount: number;
+  usage: TokenUsage;
+}
+
+// A message generated in review mode, with what is needed to run it.
+export interface PendingReview {
+  messageId: string;
+  question: string;
+  generatedSql: string;
+  proposedVisualization: ProposedVisualization;
 }
 
 interface ConversationRow {
@@ -39,6 +59,8 @@ interface MessageRow {
   sql: string | null;
   visualization: VisualizationSuggestion | null;
   row_count: number | null;
+  generated_sql: string | null;
+  edited: boolean | null;
   created_at: Date;
 }
 
@@ -47,8 +69,16 @@ interface MemoryRow {
   summarized_through_message_id: string | null;
 }
 
+interface PendingRow {
+  id: string;
+  sql: string;
+  visualization: Partial<ProposedVisualization> | null;
+  question: string | null;
+}
+
 const CONVERSATION_COLUMNS = 'id, title, created_at, updated_at';
-const MESSAGE_COLUMNS = 'id, role, content, status, sql, visualization, row_count, created_at';
+const MESSAGE_COLUMNS =
+  'id, role, content, status, sql, visualization, row_count, generated_sql, edited, created_at';
 
 function toConversation(row: ConversationRow): Conversation {
   return {
@@ -60,14 +90,18 @@ function toConversation(row: ConversationRow): Conversation {
 }
 
 function toMessage(row: MessageRow): ConversationMessage {
+  // Only answered messages carry a validated chart suggestion.
+  const visualization = row.status === 'answered' ? row.visualization : null;
   return {
     id: row.id,
     role: row.role,
     content: row.content,
     ...(row.status !== null && { status: row.status }),
     ...(row.sql !== null && { sql: row.sql }),
-    ...(row.visualization !== null && { visualization: row.visualization }),
+    ...(visualization !== null && { visualization }),
     ...(row.row_count !== null && { rowCount: row.row_count }),
+    ...(row.edited !== null && { edited: row.edited }),
+    ...(row.edited === true && row.generated_sql !== null && { generatedSql: row.generated_sql }),
     createdAt: row.created_at.toISOString(),
   };
 }
@@ -129,10 +163,69 @@ export class ConversationRepository {
     input: AssistantMessageInput,
   ): Promise<ConversationMessage> {
     const message = await this.insertMessage(conversationId, 'assistant', input);
-    await this.pool.query('UPDATE app.conversations SET updated_at = now() WHERE id = $1', [
-      conversationId,
-    ]);
+    await this.touch(conversationId);
     return message;
+  }
+
+  // A message of this conversation that is waiting for review, with the
+  // question it answers; undefined if there is none with this id.
+  async findPendingReview(
+    conversationId: string,
+    messageId: string,
+  ): Promise<PendingReview | undefined> {
+    const result = await this.pool.query<PendingRow>(
+      `SELECT m.id, m.sql, m.visualization,
+              (SELECT q.content FROM app.messages q
+               WHERE q.conversation_id = m.conversation_id AND q.role = 'user' AND q.id < m.id
+               ORDER BY q.id DESC LIMIT 1) AS question
+       FROM app.messages m
+       WHERE m.conversation_id = $1 AND m.id = $2 AND m.status = 'pending_review'`,
+      [conversationId, messageId],
+    );
+    const row = result.rows[0];
+    if (row === undefined || row.question === null) {
+      return undefined;
+    }
+    return {
+      messageId: row.id,
+      question: row.question,
+      generatedSql: row.sql,
+      proposedVisualization: {
+        type: row.visualization?.type ?? '',
+        xColumn: row.visualization?.xColumn ?? '',
+        yColumn: row.visualization?.yColumn ?? '',
+      },
+    };
+  }
+
+  // Turns a pending message into an answered one. Only succeeds while it is
+  // still pending, so the same review cannot be completed twice.
+  async completeReview(
+    conversationId: string,
+    messageId: string,
+    input: ReviewedAnswerInput,
+  ): Promise<boolean> {
+    const result = await this.pool.query(
+      `UPDATE app.messages
+       SET status = 'answered', content = $3, generated_sql = sql, sql = $4, edited = $5,
+           visualization = $6, row_count = $7,
+           input_tokens = coalesce(input_tokens, 0) + $8,
+           output_tokens = coalesce(output_tokens, 0) + $9
+       WHERE conversation_id = $1 AND id = $2 AND status = 'pending_review'`,
+      [
+        conversationId,
+        messageId,
+        input.content,
+        input.executedSql,
+        input.edited,
+        JSON.stringify(input.visualization),
+        input.rowCount,
+        input.usage.inputTokens,
+        input.usage.outputTokens,
+      ],
+    );
+    await this.touch(conversationId);
+    return result.rowCount === 1;
   }
 
   async loadMemory(conversationId: string): Promise<ConversationMemory> {
@@ -168,6 +261,12 @@ export class ConversationRepository {
        SET summary = $2, summarized_through_message_id = $3 WHERE id = $1`,
       [conversationId, summary, throughMessageId],
     );
+  }
+
+  private async touch(conversationId: string): Promise<void> {
+    await this.pool.query('UPDATE app.conversations SET updated_at = now() WHERE id = $1', [
+      conversationId,
+    ]);
   }
 
   private async insertMessage(

@@ -17,6 +17,8 @@ interface FakeBackendOptions {
   history?: Record<string, ConversationMessage[]>;
   // The events answered to the next question, in order of the questions.
   answers?: StreamEvent[][];
+  // The events answered to the next execution of a reviewed SQL.
+  executions?: StreamEvent[][];
 }
 
 function json(route: Route, body: unknown, status = 200): Promise<void> {
@@ -38,7 +40,11 @@ function sse(route: Route, events: StreamEvent[]): Promise<void> {
 export async function useFakeBackend(page: Page, options: FakeBackendOptions = {}) {
   const conversations = [...(options.conversations ?? [])];
   const answers = [...(options.answers ?? [])];
+  const executions = [...(options.executions ?? [])];
   const questions: string[] = [];
+  const modes: string[] = [];
+  // SQL received by the execution endpoint (what the user approved or edited).
+  const executedSql: string[] = [];
   let created = 0;
 
   await page.route(`**${CONVERSATIONS_PATH}`, async (route) => {
@@ -64,8 +70,9 @@ export async function useFakeBackend(page: Page, options: FakeBackendOptions = {
       return;
     }
 
-    const body = route.request().postDataJSON() as { question: string };
+    const body = route.request().postDataJSON() as { question: string; mode?: string };
     questions.push(body.question);
+    modes.push(body.mode ?? 'auto');
     const conversation = conversations.find((item) => item.id === conversationId);
     if (conversation && conversation.title === null) {
       conversation.title = body.question;
@@ -73,5 +80,11 @@ export async function useFakeBackend(page: Page, options: FakeBackendOptions = {
     await sse(route, answers.shift() ?? []);
   });
 
-  return { questions };
+  await page.route(`**${CONVERSATIONS_PATH}/*/messages/*/execute`, async (route) => {
+    const body = route.request().postDataJSON() as { sql: string };
+    executedSql.push(body.sql);
+    await sse(route, executions.shift() ?? []);
+  });
+
+  return { questions, modes, executedSql };
 }
