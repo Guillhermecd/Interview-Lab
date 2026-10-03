@@ -271,3 +271,17 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Escolha:** Vitest + Testing Library (jsdom) para componentes; Playwright para o E2E do fluxo principal com o backend simulado
 - **Data:** 2026-10-03
 - **Motivo:** cumpre a verificação do `PLANO.md`, dentro da D-09.
+
+### D-32 — Modo "revisar antes de executar"
+- **Opções:** opcional desligado por padrão | opcional ligado por padrão | sempre revisar
+- **Status:** DECIDIDA
+- **Escolha:** opcional, **desligado por padrão**; a preferência fica salva no navegador
+- **Data:** 2026-10-03
+- **Motivo:** quem quer agilidade mantém o fluxo direto; quem quer controle revisa e edita o SQL antes de rodar.
+
+### D-33 — Contrato da API para revisão e execução do SQL
+- **Opções:** stream com pausa + endpoint de execução | dois endpoints separados (gerar / executar)
+- **Status:** DECIDIDA
+- **Escolha:** `POST /conversations/:id/messages` aceita `mode: "review"`: o stream envia o SQL e termina com o evento `review` (`messageId`, `sql`), sem executar. `POST /conversations/:id/messages/:messageId/execute` recebe o SQL (original ou editado) e responde no mesmo formato de stream (`rows` → `token`… → `done`), passando pela mesma guarda SQL; o `done` informa se o SQL foi editado.
+- **Data:** 2026-10-03
+- **Motivo:** reaproveita o stream e o histórico; pergunta, SQL e explicação continuam ligados à mesma mensagem.
