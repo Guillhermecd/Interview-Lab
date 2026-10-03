@@ -68,6 +68,8 @@ class FakeQueries {
   }
 }
 
+const TABLE_ONLY = { type: 'table', xColumn: '', yColumn: '' };
+
 // In-memory cache of generated SQL; results are never cached here.
 class MemorySqlCache implements AnswerCache {
   readonly sql = new Map<string, CachedSql>();
@@ -471,7 +473,7 @@ describe('AskService review mode', () => {
   describe('cache of generated SQL', () => {
     it('uses the cached SQL without asking the LLM to generate it', async () => {
       const cache = new MemorySqlCache();
-      cache.sql.set(QUESTION, { sql: 'SELECT cached', proposedVisualization: { type: 'table' } });
+      cache.sql.set(QUESTION, { sql: 'SELECT cached', proposedVisualization: TABLE_ONLY });
       const { service, provider, queries } = setup([], ['Explicação.'], [RESULT], cache);
 
       await expect(service.ask(QUESTION)).resolves.toMatchObject({
@@ -486,7 +488,7 @@ describe('AskService review mode', () => {
       const cache = new MemorySqlCache();
       cache.sql.set(QUESTION, {
         sql: 'DELETE FROM regions',
-        proposedVisualization: { type: 'table' },
+        proposedVisualization: TABLE_ONLY,
       });
       const { service, provider, queries } = setup(
         [sqlAnswer('SELECT fresh')],
