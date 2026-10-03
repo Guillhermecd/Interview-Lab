@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import type { Pool } from 'pg';
 import { EXPOSED_SCHEMA, EXPOSED_TABLES } from '../sql-guard/allowlists.js';
@@ -18,6 +19,15 @@ export interface TableDescription {
 
 export interface SchemaDescription {
   tables: TableDescription[];
+  // Changes whenever a table, column or constraint changes; part of every cache
+  // key, so a schema change invalidates the cache (D-07b).
+  version: string;
+}
+
+const VERSION_LENGTH = 16;
+
+export function schemaVersion(tables: TableDescription[]): string {
+  return createHash('sha256').update(JSON.stringify(tables)).digest('hex').slice(0, VERSION_LENGTH);
 }
 
 const COLUMNS_SQL = `
@@ -93,6 +103,7 @@ export class SchemaCatalog {
       tables.get(row.table_name)?.constraints.push(row.definition);
     }
 
-    return { tables: [...tables.values()] };
+    const described = [...tables.values()];
+    return { tables: described, version: schemaVersion(described) };
   }
 }

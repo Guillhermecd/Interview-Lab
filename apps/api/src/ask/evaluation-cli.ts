@@ -6,6 +6,7 @@ import { QueryExecutor } from '../query/query-executor.service.js';
 import { createReadonlyPool } from '../query/readonly-pool.js';
 import { SchemaCatalog } from '../query/schema-catalog.service.js';
 import { MAX_JOINS, SqlGuard } from '../sql-guard/sql-guard.js';
+import { NoAnswerCache } from './answer-cache.js';
 import { createLlmProvider } from './ask.module.js';
 import { AskService } from './ask.service.js';
 import { EVALUATION_QUESTIONS } from './evaluation-questions.js';
@@ -74,6 +75,8 @@ async function main(): Promise<void> {
       new QueryExecutor(pool, env.query),
     ),
     { maxRows: env.query.maxRows, explainMaxRows: env.llm.explainMaxRows },
+    // The evaluation measures the LLM, so nothing is served from cache.
+    new NoAnswerCache(),
   );
 
   print(`# Avaliação manual — modelo ${env.llm.model}`);

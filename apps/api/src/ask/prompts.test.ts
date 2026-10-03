@@ -14,6 +14,7 @@ const SCHEMA: SchemaDescription = {
       constraints: ['FOREIGN KEY (customer_id) REFERENCES sales.customers(id)'],
     },
   ],
+  version: 'test-schema-v1',
 };
 
 interface ResultPayload {

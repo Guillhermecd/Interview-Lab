@@ -1,12 +1,14 @@
-import { Body, Controller, HttpCode, HttpStatus, Inject, Post } from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Inject, Post, UseGuards } from '@nestjs/common';
 import type { QueryResult } from '@interview-lab/shared';
+import { AuthGuard } from '../auth/auth.guard.js';
 import { readSql } from '../http/request-readers.js';
 import { GuardedQueryService } from './guarded-query.service.js';
 
-// Internal endpoint: the SQL goes through the guard, but there is no
-// authentication or rate limit yet (Phase 08). It is registered only when
-// INTERNAL_QUERY_ENDPOINT_ENABLED=true.
+// Internal endpoint for debugging the guard and the executor: requires a
+// signed-in user and is registered only when INTERNAL_QUERY_ENDPOINT_ENABLED=true.
+// It does not call the LLM, so no quota applies.
 @Controller('internal/queries')
+@UseGuards(AuthGuard)
 export class QueryController {
   constructor(@Inject(GuardedQueryService) private readonly queries: GuardedQueryService) {}
 

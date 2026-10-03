@@ -11,10 +11,13 @@ import {
   Param,
   Post,
   Res,
+  UseGuards,
 } from '@nestjs/common';
-import type { Conversation, ConversationList, MessageList } from '@interview-lab/shared';
+import type { AuthUser, Conversation, ConversationList, MessageList } from '@interview-lab/shared';
+import { AuthGuard, CurrentUser } from '../auth/auth.guard.js';
 import { toErrorResponse } from '../http/error-response.js';
 import { readAskMode, readQuestion, readSql } from '../http/request-readers.js';
+import { UsageService } from '../limits/usage.service.js';
 import { describeErrorForLog } from '../query/query-error.js';
 import { ConversationService } from './conversation.service.js';
 import { formatSseEvent, SSE_HEADERS, type AnswerStreamEvent } from './sse.js';
@@ -29,27 +32,32 @@ interface StreamReply {
   raw: ServerResponse;
 }
 
-// Internal endpoints: no authentication, rate limit or owner yet (Phase 08).
-// Registered only when INTERNAL_QUERY_ENDPOINT_ENABLED=true (D-22, D-28).
-@Controller('internal/conversations')
+// Conversations of the signed-in user (Phase 08). Anything that calls the LLM
+// is checked against the rate limit and the daily quota before it starts
+// (rule 7).
+@Controller('conversations')
+@UseGuards(AuthGuard)
 export class ConversationController {
   private readonly logger = new Logger(ConversationController.name);
 
-  constructor(@Inject(ConversationService) private readonly conversations: ConversationService) {}
+  constructor(
+    @Inject(ConversationService) private readonly conversations: ConversationService,
+    @Inject(UsageService) private readonly usage: UsageService,
+  ) {}
 
   @Post()
-  create(): Promise<Conversation> {
-    return this.conversations.create();
+  create(@CurrentUser() user: AuthUser): Promise<Conversation> {
+    return this.conversations.create(user.id);
   }
 
   @Get()
-  async list(): Promise<ConversationList> {
-    return { items: await this.conversations.list() };
+  async list(@CurrentUser() user: AuthUser): Promise<ConversationList> {
+    return { items: await this.conversations.list(user.id) };
   }
 
   @Get(':id/messages')
-  async listMessages(@Param('id') id: string): Promise<MessageList> {
-    await this.assertExists(id);
+  async listMessages(@CurrentUser() user: AuthUser, @Param('id') id: string): Promise<MessageList> {
+    await this.assertOwned(id, user.id);
     return { items: await this.conversations.listMessages(id) };
   }
 
@@ -60,19 +68,21 @@ export class ConversationController {
   @Post(':id/messages')
   @HttpCode(HttpStatus.OK)
   async ask(
+    @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body() body: unknown,
     @Res() reply: StreamReply,
   ): Promise<void> {
     const question = readQuestion(body);
     const mode = readAskMode(body);
-    await this.assertExists(id);
+    await this.assertOwned(id, user.id);
+    await this.usage.assertCanUseLlm(user.id);
 
     const completed = await this.stream(reply, (signal) =>
-      this.conversations.answer(id, question, mode, signal),
+      this.conversations.answer(user.id, id, question, mode, signal),
     );
     if (completed) {
-      await this.refreshMemory(id);
+      await this.refreshMemory(user.id, id);
     }
   }
 
@@ -82,27 +92,30 @@ export class ConversationController {
   @Post(':id/messages/:messageId/execute')
   @HttpCode(HttpStatus.OK)
   async execute(
+    @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Param('messageId') messageId: string,
     @Body() body: unknown,
     @Res() reply: StreamReply,
   ): Promise<void> {
     const sql = readSql(body);
-    if (!UUID_PATTERN.test(id) || !MESSAGE_ID_PATTERN.test(messageId)) {
+    if (!MESSAGE_ID_PATTERN.test(messageId)) {
       throw new NotFoundException();
     }
+    await this.assertOwned(id, user.id);
+    await this.usage.assertCanUseLlm(user.id);
     const pending = await this.conversations.claimPendingReview(id, messageId);
 
     let completed: boolean;
     try {
       completed = await this.stream(reply, (signal) =>
-        this.conversations.executeReview(id, pending, sql, signal),
+        this.conversations.executeReview(user.id, id, pending, sql, signal),
       );
     } finally {
       this.conversations.releaseReview(pending.messageId);
     }
     if (completed) {
-      await this.refreshMemory(id);
+      await this.refreshMemory(user.id, id);
     }
   }
 
@@ -141,9 +154,9 @@ export class ConversationController {
   }
 
   // Runs after the answer was delivered, so the client never waits for it.
-  private async refreshMemory(id: string): Promise<void> {
+  private async refreshMemory(userId: string, id: string): Promise<void> {
     try {
-      await this.conversations.refreshMemory(id);
+      await this.conversations.refreshMemory(userId, id);
     } catch (error) {
       this.logger.warn(
         `Could not refresh the conversation summary (${describeErrorForLog(error)})`,
@@ -151,8 +164,9 @@ export class ConversationController {
     }
   }
 
-  private async assertExists(id: string): Promise<void> {
-    if (!UUID_PATTERN.test(id) || !(await this.conversations.exists(id))) {
+  // Another user's conversation answers 404, exactly like a missing one.
+  private async assertOwned(id: string, userId: string): Promise<void> {
+    if (!UUID_PATTERN.test(id) || !(await this.conversations.isOwnedBy(id, userId))) {
       throw new NotFoundException();
     }
   }

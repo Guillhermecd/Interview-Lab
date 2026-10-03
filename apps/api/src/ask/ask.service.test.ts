@@ -8,6 +8,7 @@ import {
 import { LlmError } from '../llm/llm-error.js';
 import { QueryExecutionError } from '../query/query-error.js';
 import type { SchemaDescription } from '../query/schema-catalog.service.js';
+import { NoAnswerCache } from './answer-cache.js';
 import { AskService, type AskEvent } from './ask.service.js';
 
 const SCHEMA: SchemaDescription = {
@@ -18,6 +19,7 @@ const SCHEMA: SchemaDescription = {
       constraints: [],
     },
   ],
+  version: 'test-schema-v1',
 };
 
 const RESULT: QueryResult = {
@@ -69,10 +71,16 @@ class FakeQueries {
 function setup(jsonAnswers: unknown[], texts: (string | Error)[], outcomes: RunOutcome[]) {
   const provider = new ScriptedLlmProvider(jsonAnswers, texts);
   const queries = new FakeQueries(outcomes);
-  const service = new AskService(provider, { describe: () => Promise.resolve(SCHEMA) }, queries, {
-    maxRows: 1000,
-    explainMaxRows: 50,
-  });
+  const service = new AskService(
+    provider,
+    { describe: () => Promise.resolve(SCHEMA) },
+    queries,
+    {
+      maxRows: 1000,
+      explainMaxRows: 50,
+    },
+    new NoAnswerCache(),
+  );
   return { provider, queries, service };
 }
 

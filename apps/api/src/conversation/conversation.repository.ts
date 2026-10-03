@@ -112,9 +112,10 @@ function toMessage(row: MessageRow): ConversationMessage {
 export class ConversationRepository {
   constructor(@Inject(APP_POOL) private readonly pool: Pool) {}
 
-  async create(): Promise<Conversation> {
+  async create(ownerId: string): Promise<Conversation> {
     const result = await this.pool.query<ConversationRow>(
-      `INSERT INTO app.conversations DEFAULT VALUES RETURNING ${CONVERSATION_COLUMNS}`,
+      `INSERT INTO app.conversations (owner_id) VALUES ($1) RETURNING ${CONVERSATION_COLUMNS}`,
+      [ownerId],
     );
     const row = result.rows[0];
     if (row === undefined) {
@@ -123,19 +124,22 @@ export class ConversationRepository {
     return toConversation(row);
   }
 
-  async list(): Promise<Conversation[]> {
+  async list(ownerId: string): Promise<Conversation[]> {
     const result = await this.pool.query<ConversationRow>(
       `SELECT ${CONVERSATION_COLUMNS} FROM app.conversations
-       ORDER BY updated_at DESC LIMIT $1`,
-      [MAX_LISTED_CONVERSATIONS],
+       WHERE owner_id = $1 ORDER BY updated_at DESC LIMIT $2`,
+      [ownerId, MAX_LISTED_CONVERSATIONS],
     );
     return result.rows.map(toConversation);
   }
 
-  async exists(conversationId: string): Promise<boolean> {
-    const result = await this.pool.query('SELECT 1 FROM app.conversations WHERE id = $1', [
-      conversationId,
-    ]);
+  // Conversations of other users, and those created before authentication
+  // (no owner, D-35), do not exist for this user.
+  async isOwnedBy(conversationId: string, ownerId: string): Promise<boolean> {
+    const result = await this.pool.query(
+      'SELECT 1 FROM app.conversations WHERE id = $1 AND owner_id = $2',
+      [conversationId, ownerId],
+    );
     return result.rowCount === 1;
   }
 
