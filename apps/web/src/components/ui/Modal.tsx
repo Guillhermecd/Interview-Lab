@@ -44,7 +44,7 @@ export function Modal({ title, onClose, children, size = 'md' }: ModalProps) {
   }, []);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-overlay p-4 sm:items-center">
       <div
         ref={windowRef}
         role="dialog"

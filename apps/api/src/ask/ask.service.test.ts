@@ -8,7 +8,12 @@ import {
 import { LlmError } from '../llm/llm-error.js';
 import { QueryExecutionError } from '../query/query-error.js';
 import type { SchemaDescription } from '../query/schema-catalog.service.js';
-import { NoAnswerCache, type AnswerCache, type CachedSql } from './answer-cache.js';
+import {
+  NoAnswerCache,
+  type AnswerCache,
+  type CachedSql,
+  type ResultSlot,
+} from './answer-cache.js';
 import { AskService, type AskEvent } from './ask.service.js';
 
 const SCHEMA: SchemaDescription = {
@@ -85,11 +90,8 @@ class MemorySqlCache implements AnswerCache {
     this.sql.delete(question);
     return Promise.resolve();
   }
-  getResult(): Promise<undefined> {
-    return Promise.resolve(undefined);
-  }
-  setResult(): Promise<void> {
-    return Promise.resolve();
+  lookupResult(): Promise<ResultSlot> {
+    return Promise.resolve({ cached: undefined, store: () => Promise.resolve() });
   }
 }
 

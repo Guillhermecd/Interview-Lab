@@ -49,6 +49,8 @@
   --sx-id: #16171a;
   --shadow-elevated: 0 12px 40px rgba(20, 20, 30, 0.16);
   --shadow-control: 0 1px 2px rgba(0, 0, 0, 0.12);
+  /* Dims the page behind a dialog. */
+  --overlay: rgba(20, 20, 30, 0.4);
 }
 
 .dark {
@@ -87,6 +89,7 @@
   --sx-com: #6c7077;
   --sx-id: #dfe0e2;
   --shadow-elevated: 0 16px 48px rgba(0, 0, 0, 0.5);
+  --overlay: rgba(0, 0, 0, 0.6);
 }
 
 /* Borders derived from the tokens above; they follow the theme by themselves. */
@@ -131,6 +134,7 @@
   --color-line-warn: var(--line-warn);
   --color-line-ok: var(--line-ok);
   --color-line-info: var(--line-info);
+  --color-overlay: var(--overlay);
 
   --shadow-elevated: var(--shadow-elevated);
   --shadow-control: var(--shadow-control);
