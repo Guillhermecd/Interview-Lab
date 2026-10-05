@@ -11,6 +11,13 @@ import {
   STOCK_ALERTS,
   STOCK_MOVEMENTS,
 } from '../src/test/dashboard-fixtures';
+import {
+  CATALOG_OPTIONS,
+  CEMENT,
+  CEMENT_DETAIL,
+  MOVEMENT_PAGE,
+  RECORDED_MOVEMENT,
+} from '../src/test/catalog-fixtures';
 
 export type StreamEvent = {
   [Name in AnswerStreamEventName]: { event: Name; data: AnswerStreamEvents[Name] };
@@ -18,7 +25,12 @@ export type StreamEvent = {
 
 const CONVERSATIONS_PATH = '/api/conversations';
 
-export const E2E_USER = { id: 'u-1', email: 'ana@example.com', name: 'Ana' };
+export const E2E_USER = {
+  id: 'u-1',
+  email: 'ana@example.com',
+  name: 'Ana',
+  canManageCatalog: false,
+};
 
 interface FakeBackendOptions {
   conversations?: Conversation[];
@@ -29,6 +41,8 @@ interface FakeBackendOptions {
   executions?: StreamEvent[][];
   // Starts without a session (the login screen appears first).
   signedOut?: boolean;
+  // The signed-in user may use the registry.
+  admin?: boolean;
 }
 
 function json(route: Route, body: unknown, status = 200): Promise<void> {
@@ -53,17 +67,18 @@ export async function useFakeBackend(page: Page, options: FakeBackendOptions = {
   const executions = [...(options.executions ?? [])];
   const questions: string[] = [];
   let signedIn = options.signedOut !== true;
+  const currentUser = { ...E2E_USER, canManageCatalog: options.admin === true };
   const logins: { email: string; password: string }[] = [];
 
   await page.route('**/api/auth/me', (route) =>
     signedIn
-      ? json(route, E2E_USER)
+      ? json(route, currentUser)
       : json(route, { code: 'UNAUTHORIZED', message: 'Autenticação necessária.' }, 401),
   );
   await page.route('**/api/auth/login', async (route) => {
     logins.push(route.request().postDataJSON() as { email: string; password: string });
     signedIn = true;
-    await json(route, E2E_USER);
+    await json(route, currentUser);
   });
   await page.route('**/api/auth/logout', async (route) => {
     signedIn = false;
@@ -91,6 +106,56 @@ export async function useFakeBackend(page: Page, options: FakeBackendOptions = {
     const resource = url.pathname.split('/').at(-1) ?? '';
     dashboardRequests.push(`${resource}${url.search}`);
     await json(route, dashboard[resource] ?? {}, resource in dashboard ? 200 : 404);
+  });
+
+  // The registry. Everything answers 403 unless the user is an administrator,
+  // as the real API does.
+  const products = [CEMENT];
+  const movements = [...MOVEMENT_PAGE.items];
+  const catalogWrites: { method: string; path: string; body: unknown }[] = [];
+  await page.route('**/api/catalog/**', async (route) => {
+    if (!currentUser.canManageCatalog) {
+      await json(route, { code: 'FORBIDDEN', message: 'Acesso negado.' }, 403);
+      return;
+    }
+    const request = route.request();
+    const url = new URL(request.url());
+    const path = url.pathname.replace('/api/catalog/', '');
+    const method = request.method();
+    if (method !== 'GET') {
+      catalogWrites.push({ method, path, body: request.postDataJSON() as unknown });
+    }
+
+    if (method === 'GET' && path === 'options') {
+      await json(route, CATALOG_OPTIONS);
+    } else if (method === 'GET' && path === 'products') {
+      const search = url.searchParams.get('search')?.toLowerCase() ?? '';
+      const items = products.filter(
+        (product) =>
+          product.name.toLowerCase().includes(search) || product.sku.toLowerCase().includes(search),
+      );
+      await json(route, { items, page: 1, pageSize: 20, total: items.length });
+    } else if (method === 'POST' && path === 'products') {
+      const input = request.postDataJSON() as typeof CEMENT;
+      const created = {
+        ...input,
+        id: String(products.length + 1),
+        sku: input.sku.toUpperCase(),
+        active: true,
+        totalQuantity: 0,
+      };
+      products.push(created);
+      await json(route, { ...created, stockLevels: [] }, 201);
+    } else if (method === 'GET' && path === 'stock-movements') {
+      await json(route, { items: movements, page: 1, pageSize: 10, total: movements.length });
+    } else if (method === 'POST' && path === 'stock-movements') {
+      movements.unshift(RECORDED_MOVEMENT.movement);
+      await json(route, RECORDED_MOVEMENT, 201);
+    } else if (method === 'GET' && path === 'products/1') {
+      await json(route, CEMENT_DETAIL);
+    } else {
+      await json(route, { code: 'NOT_FOUND', message: 'Recurso não encontrado.' }, 404);
+    }
   });
 
   const modes: string[] = [];
@@ -137,5 +202,5 @@ export async function useFakeBackend(page: Page, options: FakeBackendOptions = {
     await sse(route, executions.shift() ?? []);
   });
 
-  return { questions, modes, executedSql, logins, dashboardRequests };
+  return { questions, modes, executedSql, logins, dashboardRequests, catalogWrites };
 }

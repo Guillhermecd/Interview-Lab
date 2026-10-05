@@ -51,10 +51,12 @@ export function StockLevelsDialog({ product, onClose }: StockLevelsDialogProps) 
           minimumQuantity: change.minimumQuantity,
         });
         setSaved((current) => ({ ...current, [change.centerId]: level }));
-        setTyped((current) => {
-          const { [change.centerId]: _done, ...rest } = current;
-          return rest;
-        });
+        // Saved: what was typed for this center is no longer pending.
+        setTyped((current) =>
+          Object.fromEntries(
+            Object.entries(current).filter(([centerId]) => centerId !== change.centerId),
+          ),
+        );
       }
     } catch (failure) {
       setError(toApiError(failure).message);
@@ -97,9 +99,7 @@ export function StockLevelsDialog({ product, onClose }: StockLevelsDialogProps) 
                     <input
                       aria-label={`Estoque mínimo em ${level.distributionCenter}`}
                       inputMode="numeric"
-                      value={
-                        typed[level.distributionCenterId] ?? String(level.minimumQuantity)
-                      }
+                      value={typed[level.distributionCenterId] ?? String(level.minimumQuantity)}
                       onChange={(event) => {
                         setTyped({ ...typed, [level.distributionCenterId]: event.target.value });
                       }}

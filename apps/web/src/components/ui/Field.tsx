@@ -25,7 +25,10 @@ function FieldFrame({ label, error, hint, className = '', children }: FieldFrame
       </label>
       {children({ controlId, describedBy: message === undefined ? undefined : messageId })}
       {message !== undefined && (
-        <p id={messageId} className={`text-xs ${error === undefined ? 'text-text-3' : 'text-crit'}`}>
+        <p
+          id={messageId}
+          className={`text-xs ${error === undefined ? 'text-text-3' : 'text-crit'}`}
+        >
           {message}
         </p>
       )}
@@ -42,7 +45,14 @@ interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'cl
   mono?: boolean;
 }
 
-export function TextField({ label, error, hint, className, mono = false, ...input }: TextFieldProps) {
+export function TextField({
+  label,
+  error,
+  hint,
+  className,
+  mono = false,
+  ...input
+}: TextFieldProps) {
   return (
     <FieldFrame label={label} error={error} hint={hint} className={className}>
       {({ controlId, describedBy }) => (

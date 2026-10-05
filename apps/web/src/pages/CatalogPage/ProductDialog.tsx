@@ -4,7 +4,7 @@ import {
   type CatalogProduct,
   type ProductUnit,
 } from '@interview-lab/shared';
-import { useState, type FormEvent } from 'react';
+import { useState } from 'react';
 import { CatalogService } from '../../api/modules/catalog.service';
 import { Button } from '../../components/ui/Button';
 import { ErrorMessage } from '../../components/ui/ErrorMessage';
@@ -45,7 +45,7 @@ export function ProductDialog({ product, options, onSaved, onClose }: ProductDia
   const [errors, setErrors] = useState<FormErrors>(NO_ERRORS);
   const [saving, setSaving] = useState(false);
 
-  async function submit(event: FormEvent) {
+  async function submit(event: { preventDefault: () => void }) {
     event.preventDefault();
     const priceValue = parseNumber(price);
     const costValue = parseNumber(cost);

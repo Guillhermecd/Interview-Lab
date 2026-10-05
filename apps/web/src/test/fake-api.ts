@@ -93,4 +93,11 @@ export class FakeApi {
   };
 }
 
-export const TEST_USER = { id: 'u-1', email: 'ana@example.com', name: 'Ana' };
+export const TEST_USER = {
+  id: 'u-1',
+  email: 'ana@example.com',
+  name: 'Ana',
+  canManageCatalog: false,
+};
+// The same person once promoted with `db:promote-admin`.
+export const TEST_ADMIN = { ...TEST_USER, canManageCatalog: true };

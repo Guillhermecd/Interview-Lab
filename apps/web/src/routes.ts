@@ -1,5 +1,6 @@
 export const DASHBOARD_PATH = '/dashboard';
 export const CHAT_PATH = '/chat';
+export const CATALOG_PATH = '/cadastro';
 
 // What a screen may hand to the chat when sending the user there.
 export interface ChatLocationState {

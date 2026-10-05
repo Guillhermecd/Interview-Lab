@@ -1,10 +1,14 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import { afterEach } from 'vitest';
 
 afterEach(() => {
   cleanup();
 });
+
+// The default wait (1 s) is sometimes too short for the first render of a
+// screen while every test file is loading its modules at the same time.
+configure({ asyncUtilTimeout: 3000 });
 
 // jsdom has no layout engine; charts, the code editor and auto-scroll only need
 // these to exist.
