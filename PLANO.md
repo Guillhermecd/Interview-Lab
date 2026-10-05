@@ -21,7 +21,7 @@ tabela/gráfico + explicação, em streaming.
 | 07 | Human-in-the-loop (revisar/editar SQL) | — | CONCLUÍDA |
 | 08 | Autenticação, tokens por usuário, rate limit, cache | D-07b, D-08 | CONCLUÍDA |
 | 09a | Design: tokens, tema, componentes e chat reestilizado | D-38, D-39, D-41, D-44, D-45, D-46, D-47 | CONCLUÍDA |
-| 09c | Design: dashboard operacional | D-40, D-43, D-48, D-50 a D-55 | EM ANDAMENTO |
+| 09c | Design: dashboard operacional | D-40, D-43, D-48, D-50 a D-55, D-57 | CONCLUÍDA |
 | 09e | Cadastro de materiais e movimentações de estoque | D-56 | PENDENTE |
 | 09b | Design: tela do chat em três colunas e painel de schema | D-41 | PENDENTE |
 | 09d | Design: chat suspenso no dashboard | D-42 | PENDENTE |

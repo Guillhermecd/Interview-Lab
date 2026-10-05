@@ -415,6 +415,7 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Data:** 2026-10-05
 - **Motivo:** o dashboard é a prioridade; a 09c já leva schema, seed, endpoints e a tela, e o cadastro abre um caminho de escrita que merece revisão separada.
 - **Consequência:** o roteador (D-43) e a barra superior (D-48) entram na 09c, não na 09b.
+- **"Perguntar sobre isto" até a 09d:** os botões dos cards levam ao `/chat` com a pergunta e o contexto escritos no composer (D-42), para o usuário enviar. Nada é enviado sozinho. A janela suspensa da 09d substitui essa navegação.
 
 ### D-50 — Tabelas do dashboard (detalhe da D-40)
 - **Opções:** nomes em inglês estendendo as tabelas atuais | nomes em português como no protótipo (`materiais`, `pedidos_venda`…)
@@ -476,3 +477,20 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Data:** 2026-10-05
 - **Motivo:** o que alimenta estoque, ruptura e giro são as movimentações; movimentação é registro de auditoria; o repositório é público e a demonstração será publicada, então escrita exige permissão própria.
 - **Pontos de atenção:** `db:seed` apaga o que foi cadastrado; toda regra (SKU único, quantidade positiva, saída maior que o saldo) é validada no backend.
+
+### D-57 — Regras de cálculo do dashboard
+- **Contexto:** o protótipo mostra números fixos; as regras abaixo definem como o backend os calcula. Foram escolhidas na implementação da 09c, dentro da D-40, e ficam registradas para revisão.
+- **Status:** DECIDIDA
+- **Escolha:**
+  - **Dia e período:** os dias são contados no fuso `America/Sao_Paulo`, qualquer que seja o fuso do servidor ou do navegador. "Mês", "Trimestre" e "Ano" vão do início do período até hoje. A comparação é sempre com o período imediatamente anterior, de mesma duração em dias.
+  - **Faturamento e pedidos:** só pedidos com status diferente de `cancelled`, pela data do pedido. Ticket médio é faturamento dividido por pedidos.
+  - **Estoque no passado:** o saldo de uma data é o saldo de hoje menos tudo o que movimentou depois dela. Valor em estoque é quantidade vezes custo, incluindo materiais arquivados.
+  - **Giro (dias de cobertura):** valor em estoque no fim do período dividido pelo custo médio diário das saídas do período.
+  - **Abaixo do mínimo:** materiais ativos com saldo menor que o estoque mínimo, no fim do período.
+  - **Alertas de ruptura:** cobertura é o saldo dividido pela saída média diária dos últimos 30 dias. **Crítico:** abaixo do mínimo e cobertura de até 5 dias. **Atenção:** abaixo do mínimo nos demais casos (inclusive sem saída recente). **OK:** no mínimo ou acima dele, por menos de 20%.
+  - **Entrega no prazo:** entre os pedidos entregues no período, os que chegaram até a data prevista. Meta pela D-55.
+  - **Curva ABC:** materiais ativos ordenados pelo faturamento dos 12 meses que terminam no fim do período. Classe A: os que abrem os primeiros 80% do faturamento; classe B: os 15% seguintes; classe C: o resto, inclusive os sem venda.
+  - **Tendência e cor:** variação menor que 0,05 é "estável". A cor da variação é decidida pelo backend: alta de faturamento, pedidos e entrega no prazo é boa; alta de dias de cobertura e de itens abaixo do mínimo é ruim; valor em estoque é neutro.
+- **Data:** 2026-10-05
+- **Motivo:** um único lugar para cada regra (`apps/api/src/dashboard/dashboard-rules.ts`), com testes de números conferidos à mão; o frontend só formata.
+- **Ponto de atenção:** os limiares (5 dias, 20%, 80%/95%, 30 dias) são constantes no código, não configuração.
