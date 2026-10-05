@@ -406,3 +406,73 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Escolha:** mostrar as iniciais e o nome do usuário autenticado, sem cargo, e manter a ação de sair.
 - **Data:** 2026-10-05
 - **Motivo:** a tela só mostra o que o backend informa.
+
+### D-49 — Ordem dos PRs da Fase 09 e entrada do cadastro
+- **Contexto:** depois da 09a, o Guilherme pediu o dashboard antes da tela do chat em três colunas e uma tela de cadastro, com CRUD completo e endpoints, para alimentar o dashboard.
+- **Opções:** manter a ordem 09b → 09c → 09d | dashboard primeiro; cadastro junto com a 09c | cadastro em PR próprio
+- **Status:** DECIDIDA
+- **Escolha:** nova ordem **09c (dashboard, levando o roteador) → 09e (cadastro) → 09b (chat em três colunas) → 09d (chat suspenso)**. O cadastro é um PR próprio, a **Fase 09e**.
+- **Data:** 2026-10-05
+- **Motivo:** o dashboard é a prioridade; a 09c já leva schema, seed, endpoints e a tela, e o cadastro abre um caminho de escrita que merece revisão separada.
+- **Consequência:** o roteador (D-43) e a barra superior (D-48) entram na 09c, não na 09b.
+
+### D-50 — Tabelas do dashboard (detalhe da D-40)
+- **Opções:** nomes em inglês estendendo as tabelas atuais | nomes em português como no protótipo (`materiais`, `pedidos_venda`…)
+- **Status:** DECIDIDA
+- **Escolha:** nomes em **inglês**, estendendo o schema `sales`:
+  - novas: `distribution_centers` (`name`, `city`, `state`, `region_id`), `stock_levels` (`distribution_center_id`, `product_id`, `quantity`, `minimum_quantity`) e `stock_movements` (`moved_at`, `type` — `inbound`, `outbound`, `transfer`, `adjustment` —, `product_id`, `distribution_center_id`, `destination_center_id`, `quantity`, `responsible_name`, `document`);
+  - `products` ganha `sku`, `unit` e `cost`;
+  - `orders` ganha `distribution_center_id`, `expected_delivery_at` e `delivered_at`.
+- **Data:** 2026-10-05
+- **Motivo:** padrão de nomenclatura do projeto; não quebra a guarda SQL, o prompt nem os testes existentes.
+- **Custo aceito:** a migration apaga os dados de demonstração de `sales` (as colunas novas são `NOT NULL`); `db:seed` recria tudo. O schema `app` não é tocado. As tabelas novas entram na allowlist da guarda e no contexto do prompt, que fica maior.
+
+### D-51 — Dados de demonstração do dashboard
+- **Opções:** trocar o seed para materiais de construção, como no handoff | manter produtos genéricos; 200 produtos | 40
+- **Status:** DECIDIDA
+- **Escolha:** seed da "Rota Materiais": 5 categorias do handoff (Cimento e argamassa, Aço e metais, Tubos e conexões, Elétrica e cabos, EPIs), **200 produtos**, 9 centros de distribuição nas 5 regiões, estoque e movimentações.
+- **Data:** 2026-10-05
+- **Motivo:** dados coerentes com as telas; 200 produtos dão forma à curva ABC. Substitui a parte "regiões, produtos, pedidos" genérica da D-05, que continua valendo no resto (schema próprio, seed gerado, datas relativas a hoje).
+
+### D-52 — Região do faturamento
+- **Opções:** região do centro de distribuição que atendeu o pedido | região do cliente
+- **Status:** DECIDIDA
+- **Escolha:** região do **centro de distribuição** do pedido.
+- **Data:** 2026-10-05
+- **Motivo:** é a leitura do handoff, e os filtros de centro de distribuição e de região ficam coerentes entre si.
+
+### D-53 — Views do handoff
+- **Opções:** não criar; os endpoints usam SQL próprio | criar `vw_saidas_12m` e `vw_estoque_valorizado` e expô-las à IA
+- **Status:** DECIDIDA
+- **Escolha:** não criar views.
+- **Data:** 2026-10-05
+- **Motivo:** menos superfície para a guarda SQL; a IA consegue as mesmas respostas pelas tabelas.
+
+### D-54 — Acesso dos endpoints do dashboard ao banco
+- **Opções:** pool `app_readonly`, com SQL fixo e parametrizado | pool da aplicação (`app_rw`)
+- **Status:** DECIDIDA
+- **Escolha:** pool `app_readonly`. O SQL do dashboard é escrito no código, com valores sempre por parâmetro; nenhum texto vindo do usuário ou da IA passa por esse caminho.
+- **Data:** 2026-10-05
+- **Motivo:** `app_rw` continua sem ler `sales`; o dashboard herda o `statement_timeout` e o somente leitura da role.
+
+### D-55 — Meta de entrega no prazo
+- **Opções:** variável de ambiente no backend | coluna ou tabela
+- **Status:** DECIDIDA
+- **Escolha:** variável de ambiente `ON_TIME_DELIVERY_TARGET_PERCENT`, padrão 95.
+- **Data:** 2026-10-05
+- **Motivo:** um único número, lido e devolvido pelo backend; a tela só o exibe.
+
+### D-56 — Tela de cadastro (Fase 09e)
+- **Contexto:** hoje nada na aplicação escreve no schema `sales`; a role somente leitura é a primeira camada de segurança. O cadastro cria o primeiro caminho de escrita.
+- **Status:** DECIDIDA
+- **Escolha:**
+  - **O que é cadastrado:** materiais (produtos), com CRUD completo, e movimentações de estoque.
+  - **Movimentações:** só criar e listar. Correção é um novo lançamento de ajuste; não há edição nem exclusão.
+  - **Role de escrita:** role nova no banco, com escrita apenas nas tabelas do cadastro e pool próprio. O chat continua usando só `app_readonly`; a IA nunca usa o pool de escrita.
+  - **Quem pode cadastrar:** só administrador (coluna `role` em `app.users`). O primeiro administrador é definido por variável de ambiente com o e-mail.
+  - **Excluir material:** arquiva (`active = false`); o histórico de pedidos e movimentações fica.
+  - **Saldo de estoque:** calculado pelas movimentações, na mesma transação; só o estoque mínimo é editável.
+  - **Cache:** cada escrita invalida o cache de resultados de consulta.
+- **Data:** 2026-10-05
+- **Motivo:** o que alimenta estoque, ruptura e giro são as movimentações; movimentação é registro de auditoria; o repositório é público e a demonstração será publicada, então escrita exige permissão própria.
+- **Pontos de atenção:** `db:seed` apaga o que foi cadastrado; toda regra (SKU único, quantidade positiva, saída maior que o saldo) é validada no backend.

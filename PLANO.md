@@ -21,12 +21,14 @@ tabela/gráfico + explicação, em streaming.
 | 07 | Human-in-the-loop (revisar/editar SQL) | — | CONCLUÍDA |
 | 08 | Autenticação, tokens por usuário, rate limit, cache | D-07b, D-08 | CONCLUÍDA |
 | 09a | Design: tokens, tema, componentes e chat reestilizado | D-38, D-39, D-41, D-44, D-45, D-46, D-47 | CONCLUÍDA |
-| 09b | Design: tela do chat em três colunas e painel de schema | D-41, D-43, D-48 | PENDENTE |
-| 09c | Design: dashboard operacional | D-40 | PENDENTE |
+| 09c | Design: dashboard operacional | D-40, D-43, D-48, D-50 a D-55 | EM ANDAMENTO |
+| 09e | Cadastro de materiais e movimentações de estoque | D-56 | PENDENTE |
+| 09b | Design: tela do chat em três colunas e painel de schema | D-41 | PENDENTE |
 | 09d | Design: chat suspenso no dashboard | D-42 | PENDENTE |
 | 10 | Observabilidade, hardening, deploy e README | D-11 | PENDENTE |
 
-A ordem acima é uma proposta (ver D-10). A Fase 09 entrou em 2026-10-05 (D-38).
+A ordem acima é uma proposta (ver D-10). A Fase 09 entrou em 2026-10-05 (D-38); a ordem
+dos seus PRs e a Fase 09e foram definidas na D-49.
 
 ---
 
@@ -142,7 +144,6 @@ atualizados; E2E do fluxo principal.
 
 ### Fase 09b — Tela do chat em três colunas e painel de schema
 **Entregas**
-- Roteador (D-43) com `/chat`; barra superior com tema, usuário e sair (D-48).
 - Lista de conversas (264px) com busca, grupos por data e badge de estado; conversa (máx. 900px);
   painel de schema (300px, recolhível, fechado abaixo de 1200px).
 - Medidor "Tokens hoje" no cabeçalho; conversa vazia com 6 sugestões.
@@ -152,11 +153,23 @@ atualizados; E2E do fluxo principal.
 
 ### Fase 09c — Dashboard operacional
 **Entregas**
-- Schema `sales` ampliado e seed (D-40); tabelas novas na allowlist da guarda SQL.
-- Endpoints de agregação para KPIs, gráficos e tabelas; nenhum cálculo de negócio no frontend.
+- Schema `sales` ampliado (D-50) e seed da "Rota Materiais" (D-51); tabelas novas na allowlist da guarda SQL.
+- Endpoints de agregação para KPIs, gráficos e tabelas, pelo pool somente leitura (D-54); nenhum cálculo de negócio no frontend.
+- Roteador (D-43) com `/dashboard` e `/chat`; barra superior com navegação, tema, usuário e sair (D-48).
 - Página `/dashboard`: filtros fixos, 6 KPIs, 5 gráficos, 2 tabelas, grid responsivo (1440 e 834).
 
-**Verificação:** testes de integração dos endpoints; guarda SQL com as tabelas novas; testes de componentes.
+**Verificação:** testes de integração dos endpoints; guarda SQL com as tabelas novas; testes de componentes; E2E.
+
+### Fase 09e — Cadastro de materiais e movimentações de estoque
+**Objetivo:** alimentar o dashboard pela própria aplicação, sem abrir o caminho da IA para escrita (D-56).
+**Entregas**
+- Role de escrita própria no banco, com pool separado; `app_readonly` e o chat não mudam.
+- Papel de administrador em `app.users`; só ele cadastra.
+- Endpoints: CRUD de materiais (excluir arquiva) e criação/listagem de movimentações, que atualizam o saldo na mesma transação.
+- Tela "Cadastro": materiais (listar, criar, editar, arquivar) e lançamento de movimentações.
+- Invalidação do cache de resultados a cada escrita.
+
+**Verificação:** testes de integração provando que a role de escrita não alcança outras tabelas, que quem não é administrador recebe `403`, as regras de validação e o saldo após cada tipo de movimentação; testes de componentes; E2E.
 
 ### Fase 09d — Chat suspenso no dashboard
 **Entregas**
