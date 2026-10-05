@@ -5,13 +5,14 @@ import type { AppEnv, QueryEnv } from '../../src/config/env.js';
 import type { LimitsEnv } from '../../src/config/security-env.js';
 import { migrateUp } from '../../src/database/migrate.js';
 import { provisionRolePasswords } from '../../src/database/provision-roles.js';
-import { APP_ROLE, READONLY_ROLE } from '../../src/database/roles.js';
+import { APP_ROLE, CATALOG_ROLE, READONLY_ROLE } from '../../src/database/roles.js';
 
 const POSTGRES_IMAGE = 'postgres:17-alpine';
 const REDIS_IMAGE = 'redis:7-alpine';
 const REDIS_PORT = 6379;
 const READONLY_TEST_PASSWORD = 'readonly-test-password';
 const APP_TEST_PASSWORD = 'app-test-password';
+const CATALOG_TEST_PASSWORD = 'catalog-test-password';
 const TEST_POOL_MAX = 4;
 // Nothing listens here: tests that need Redis start it with { redis: true }.
 const NO_REDIS_URL = 'redis://127.0.0.1:1';
@@ -42,6 +43,7 @@ export interface TestDatabase {
   admin: ClientConfig;
   readonly: ClientConfig;
   app: ClientConfig;
+  catalog: ClientConfig;
   // What the API needs to reach this database (and Redis, when started).
   appEnv: (query?: Partial<QueryEnv>, options?: Omit<TestEnvOptions, 'query'>) => AppEnv;
   stop: () => Promise<void>;
@@ -96,6 +98,7 @@ export async function startTestDatabase(options: { redis?: boolean } = {}): Prom
     admin: connectionFor(container, container.getUsername(), container.getPassword()),
     readonly: connectionFor(container, READONLY_ROLE, READONLY_TEST_PASSWORD),
     app: connectionFor(container, APP_ROLE, APP_TEST_PASSWORD),
+    catalog: connectionFor(container, CATALOG_ROLE, CATALOG_TEST_PASSWORD),
     appEnv: (query = {}, envOptions = {}) => ({
       port: 0,
       database: {
@@ -110,6 +113,13 @@ export async function startTestDatabase(options: { redis?: boolean } = {}): Prom
         port: container.getPort(),
         name: container.getDatabase(),
         appPassword: APP_TEST_PASSWORD,
+        poolMax: TEST_POOL_MAX,
+      },
+      catalogDatabase: {
+        host: container.getHost(),
+        port: container.getPort(),
+        name: container.getDatabase(),
+        catalogPassword: CATALOG_TEST_PASSWORD,
         poolMax: TEST_POOL_MAX,
       },
       query: { ...DEFAULT_TEST_QUERY_ENV, ...query },
@@ -141,6 +151,7 @@ export async function migrateTestDatabase(database: TestDatabase): Promise<void>
     provisionRolePasswords(client, {
       readonlyPassword: READONLY_TEST_PASSWORD,
       appPassword: APP_TEST_PASSWORD,
+      catalogPassword: CATALOG_TEST_PASSWORD,
     }),
   );
 }

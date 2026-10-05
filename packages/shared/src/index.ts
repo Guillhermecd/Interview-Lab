@@ -186,6 +186,9 @@ export interface AuthUser {
   id: string;
   email: string;
   name: string;
+  // Decided by the server: whether this user may use the registry. The client
+  // only shows or hides screens with it; every request is checked again.
+  canManageCatalog: boolean;
 }
 
 export interface RegisterRequest {
@@ -392,3 +395,94 @@ export interface StockMovement {
 export interface StockMovementList {
   items: StockMovement[];
 }
+
+// ---------------------------------------------------------------------------
+// Registry (Phase 09e): products and stock movements, written only by users
+// the server allows (AuthUser.canManageCatalog).
+
+// How a product is counted: bag, bar, roll, pair or unit.
+export const PRODUCT_UNITS = ['sc', 'br', 'rl', 'pr', 'un'] as const;
+export type ProductUnit = (typeof PRODUCT_UNITS)[number];
+
+export interface CatalogProduct {
+  id: string;
+  sku: string;
+  name: string;
+  category: string;
+  unit: ProductUnit;
+  price: number;
+  cost: number;
+  // False once archived: kept in the history, out of new movements.
+  active: boolean;
+  // Stock in all distribution centers together.
+  totalQuantity: number;
+}
+
+// What the user types to create a product, or to replace its data.
+export interface ProductInput {
+  sku: string;
+  name: string;
+  category: string;
+  unit: ProductUnit;
+  price: number;
+  cost: number;
+}
+
+export const PRODUCT_STATUS_FILTERS = ['active', 'archived', 'all'] as const;
+export type ProductStatusFilter = (typeof PRODUCT_STATUS_FILTERS)[number];
+
+// Lists come in pages (API contract): `page` starts at 1.
+export interface Page<Item> {
+  items: Item[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
+export type CatalogProductPage = Page<CatalogProduct>;
+
+// The stock of one product in one distribution center.
+export interface ProductStockLevel {
+  distributionCenterId: string;
+  distributionCenter: string;
+  quantity: number;
+  minimumQuantity: number;
+}
+
+export interface CatalogProductDetail extends CatalogProduct {
+  // One entry per distribution center, including those with no stock.
+  stockLevels: ProductStockLevel[];
+}
+
+export interface MinimumStockInput {
+  minimumQuantity: number;
+}
+
+// What the forms of the registry offer.
+export interface CatalogOptions {
+  categories: string[];
+  units: ProductUnit[];
+  distributionCenters: { id: string; name: string }[];
+}
+
+// A movement to record. The server sets the time and who is responsible (the
+// signed-in user); the balance is updated in the same transaction.
+export interface StockMovementInput {
+  type: StockMovementType;
+  productId: string;
+  distributionCenterId: string;
+  // Transfers only: where the stock goes.
+  destinationCenterId?: string;
+  // Positive; an adjustment may be negative, to take stock out.
+  quantity: number;
+  // Invoice, order or reason.
+  document: string;
+}
+
+export interface RecordedStockMovement {
+  movement: StockMovement;
+  // The balances changed by the movement, after it.
+  stockLevels: ProductStockLevel[];
+}
+
+export type StockMovementPage = Page<StockMovement>;

@@ -7,6 +7,7 @@ const REQUIRED_ENV = {
   DB_NAME: 'interview_lab',
   DB_READONLY_PASSWORD: 'readonly-secret',
   DB_APP_PASSWORD: 'app-secret',
+  DB_CATALOG_PASSWORD: 'catalog-secret',
   JWT_SECRET: 'a-development-secret-with-32-characters',
 };
 
@@ -27,6 +28,13 @@ describe('loadEnv', () => {
         name: 'interview_lab',
         appPassword: 'app-secret',
         poolMax: 10,
+      },
+      catalogDatabase: {
+        host: 'localhost',
+        port: 5432,
+        name: 'interview_lab',
+        catalogPassword: 'catalog-secret',
+        poolMax: 3,
       },
       query: {
         maxRows: 1000,

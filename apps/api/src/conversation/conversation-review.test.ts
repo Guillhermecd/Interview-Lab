@@ -9,7 +9,12 @@ import type { ConversationRepository, PendingReview } from './conversation.repos
 import { ConversationService } from './conversation.service.js';
 
 const CONVERSATION_ID = '11111111-1111-4111-8111-111111111111';
-const USER = { id: '99999999-9999-4999-8999-999999999999', email: 'a@b.c', name: 'A' };
+const USER = {
+  id: '99999999-9999-4999-8999-999999999999',
+  email: 'a@b.c',
+  name: 'A',
+  canManageCatalog: false,
+};
 const ALLOW_ALL = {
   assertCanUseLlm: vi.fn(() => Promise.resolve()),
 } as unknown as UsageService;

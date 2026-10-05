@@ -2,6 +2,7 @@ import { Module, type DynamicModule } from '@nestjs/common';
 import type { AuthEnv } from '../config/security-env.js';
 import { AuthController } from './auth.controller.js';
 import { AuthGuard } from './auth.guard.js';
+import { CatalogAdminGuard } from './catalog-admin.guard.js';
 import { AuthService } from './auth.service.js';
 import { AUTH_ENV, AuthTokenService } from './auth-token.service.js';
 import { OriginGuard } from './origin.guard.js';
@@ -21,9 +22,17 @@ export class AuthModule {
         UserRepository,
         AuthService,
         AuthGuard,
+        CatalogAdminGuard,
         OriginGuard,
       ],
-      exports: [AUTH_ENV, AuthTokenService, UserRepository, AuthGuard, OriginGuard],
+      exports: [
+        AUTH_ENV,
+        AuthTokenService,
+        UserRepository,
+        AuthGuard,
+        CatalogAdminGuard,
+        OriginGuard,
+      ],
     };
   }
 }

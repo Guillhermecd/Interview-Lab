@@ -1,10 +1,18 @@
 import { Client, type ClientConfig } from 'pg';
 import { loadDatabaseEnv, type DatabaseEnv } from './database-env.js';
 import { migrateDown, migrateUp } from './migrate.js';
+import { promoteAdmin } from './promote-admin.js';
 import { provisionRolePasswords } from './provision-roles.js';
 import { seedDemoData } from './seed.js';
 
-const COMMANDS = ['migrate', 'migrate:down', 'provision', 'seed', 'setup'] as const;
+const COMMANDS = [
+  'migrate',
+  'migrate:down',
+  'provision',
+  'seed',
+  'setup',
+  'promote-admin',
+] as const;
 type Command = (typeof COMMANDS)[number];
 
 function isCommand(value: string | undefined): value is Command {
@@ -38,7 +46,7 @@ async function withAdminClient(
   }
 }
 
-async function run(command: Command, env: DatabaseEnv): Promise<void> {
+async function run(command: Command, env: DatabaseEnv, argument?: string): Promise<void> {
   const connection = adminConnection(env);
   const provision = () =>
     withAdminClient(connection, (client) => provisionRolePasswords(client, env));
@@ -62,6 +70,14 @@ async function run(command: Command, env: DatabaseEnv): Promise<void> {
       await provision();
       await seed();
       break;
+    case 'promote-admin':
+      if (argument === undefined || argument.trim() === '') {
+        throw new Error('Usage: promote-admin <email of an existing account>');
+      }
+      await withAdminClient(connection, async (client) => {
+        log(`${await promoteAdmin(client, argument)} is now an administrator of the registry.`);
+      });
+      break;
   }
   log(`Database command "${command}" finished.`);
 }
@@ -71,7 +87,7 @@ async function main(): Promise<void> {
   if (!isCommand(command)) {
     throw new Error(`Unknown database command. Use one of: ${COMMANDS.join(', ')}`);
   }
-  await run(command, loadDatabaseEnv(process.env));
+  await run(command, loadDatabaseEnv(process.env), process.argv[3]);
 }
 
 await main();

@@ -8,6 +8,7 @@ export interface DatabaseEnv extends DatabaseConnectionEnv {
   adminPassword: string;
   readonlyPassword: string;
   appPassword: string;
+  catalogPassword: string;
 }
 
 export function loadDatabaseEnv(source: NodeJS.ProcessEnv): DatabaseEnv {
@@ -17,5 +18,6 @@ export function loadDatabaseEnv(source: NodeJS.ProcessEnv): DatabaseEnv {
     adminPassword: requireValue(source, 'DB_ADMIN_PASSWORD'),
     readonlyPassword: requireValue(source, 'DB_READONLY_PASSWORD'),
     appPassword: requireValue(source, 'DB_APP_PASSWORD'),
+    catalogPassword: requireValue(source, 'DB_CATALOG_PASSWORD'),
   };
 }

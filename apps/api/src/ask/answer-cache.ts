@@ -5,6 +5,7 @@ import type { LimitsEnv } from '../config/security-env.js';
 import { LIMITS_ENV } from '../limits/usage.service.js';
 import { describeErrorForLog } from '../query/query-error.js';
 import { REDIS, type RedisClient } from '../redis/redis.module.js';
+import { SalesDataVersion } from '../redis/sales-data-version.js';
 import type { ProposedVisualization } from './llm-output.js';
 
 export const ANSWER_CACHE = Symbol('ANSWER_CACHE');
@@ -20,9 +21,21 @@ export interface AnswerCache {
   getSql(question: string, schemaVersion: string): Promise<CachedSql | undefined>;
   setSql(question: string, schemaVersion: string, value: CachedSql): Promise<void>;
   deleteSql(question: string, schemaVersion: string): Promise<void>;
-  getResult(sql: string, schemaVersion: string): Promise<QueryResult | undefined>;
-  setResult(sql: string, schemaVersion: string, result: QueryResult): Promise<void>;
+  // Looks a result up and says how to store one under the same key. The key
+  // is fixed before the query runs: see ResultSlot.
+  lookupResult(sql: string, schemaVersion: string): Promise<ResultSlot>;
 }
+
+// The place of one query result in the cache. `store` writes under the key the
+// lookup used, whatever happened in between: if the registry changed the data
+// while the query ran, the result lands under the old data version, where no
+// later question looks, instead of being served as if it were fresh.
+export interface ResultSlot {
+  cached: QueryResult | undefined;
+  store: (result: QueryResult) => Promise<void>;
+}
+
+const NO_SLOT: ResultSlot = { cached: undefined, store: () => Promise.resolve() };
 
 // "Qual o faturamento por região?" and "qual o  faturamento por região" are
 // the same question.
@@ -50,11 +63,8 @@ export class NoAnswerCache implements AnswerCache {
   deleteSql(): Promise<void> {
     return Promise.resolve();
   }
-  getResult(): Promise<undefined> {
-    return Promise.resolve(undefined);
-  }
-  setResult(): Promise<void> {
-    return Promise.resolve();
+  lookupResult(): Promise<ResultSlot> {
+    return Promise.resolve(NO_SLOT);
   }
 }
 
@@ -67,6 +77,7 @@ export class RedisAnswerCache implements AnswerCache {
   constructor(
     @Inject(REDIS) private readonly redis: RedisClient,
     @Inject(LIMITS_ENV) private readonly limits: LimitsEnv,
+    @Inject(SalesDataVersion) private readonly dataVersion: Pick<SalesDataVersion, 'current'>,
   ) {}
 
   getSql(question: string, schemaVersion: string): Promise<CachedSql | undefined> {
@@ -88,27 +99,34 @@ export class RedisAnswerCache implements AnswerCache {
     }
   }
 
-  getResult(sql: string, schemaVersion: string): Promise<QueryResult | undefined> {
-    return this.read<QueryResult>(
-      this.resultKey(sql, schemaVersion),
-      this.limits.resultCacheTtlSeconds,
-    );
-  }
-
-  setResult(sql: string, schemaVersion: string, result: QueryResult): Promise<void> {
-    return this.write(
-      this.resultKey(sql, schemaVersion),
-      result,
-      this.limits.resultCacheTtlSeconds,
-    );
+  async lookupResult(sql: string, schemaVersion: string): Promise<ResultSlot> {
+    const ttlSeconds = this.limits.resultCacheTtlSeconds;
+    if (ttlSeconds === 0) {
+      return NO_SLOT;
+    }
+    let key: string;
+    try {
+      // Read once, before the query: the same key serves the lookup and the store.
+      key = await this.resultKey(sql, schemaVersion);
+    } catch (error) {
+      this.logger.warn(`Cache read failed (${describeErrorForLog(error)})`);
+      return NO_SLOT;
+    }
+    return {
+      cached: await this.read<QueryResult>(key, ttlSeconds),
+      store: (result) => this.write(key, result, ttlSeconds),
+    };
   }
 
   private sqlKey(question: string, schemaVersion: string): string {
     return `cache:sql:${schemaVersion}:${digest(normalizeQuestion(question))}`;
   }
 
-  private resultKey(sql: string, schemaVersion: string): string {
-    return `cache:result:${schemaVersion}:${digest(sql.trim())}`;
+  // Results also carry the version of the data: a write through the registry
+  // changes it, and what was cached before is not served again (D-56).
+  private async resultKey(sql: string, schemaVersion: string): Promise<string> {
+    const dataVersion = await this.dataVersion.current();
+    return `cache:result:${schemaVersion}:${dataVersion}:${digest(sql.trim())}`;
   }
 
   private async read<T>(key: string, ttlSeconds: number): Promise<T | undefined> {

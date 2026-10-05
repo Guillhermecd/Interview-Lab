@@ -10,6 +10,7 @@ const VALID_ENV = {
   DB_ADMIN_PASSWORD: 'admin-secret',
   DB_READONLY_PASSWORD: 'readonly-secret',
   DB_APP_PASSWORD: 'app-secret',
+  DB_CATALOG_PASSWORD: 'catalog-secret',
 };
 
 describe('loadDatabaseEnv', () => {
@@ -22,6 +23,7 @@ describe('loadDatabaseEnv', () => {
       adminPassword: 'admin-secret',
       readonlyPassword: 'readonly-secret',
       appPassword: 'app-secret',
+      catalogPassword: 'catalog-secret',
     });
   });
 
@@ -40,6 +42,7 @@ describe('loadDatabaseEnv', () => {
     'DB_ADMIN_PASSWORD',
     'DB_READONLY_PASSWORD',
     'DB_APP_PASSWORD',
+    'DB_CATALOG_PASSWORD',
   ])('rejects a missing %s', (variable) => {
     expect(() => loadDatabaseEnv({ ...VALID_ENV, [variable]: '' })).toThrow(InvalidEnvError);
   });

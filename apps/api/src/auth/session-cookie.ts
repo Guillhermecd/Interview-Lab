@@ -1,3 +1,5 @@
+import type { AuthUser } from '@interview-lab/shared';
+
 export const SESSION_COOKIE = 'interview_lab_session';
 
 // The parts of the Fastify request and reply used to read and write the
@@ -5,7 +7,7 @@ export const SESSION_COOKIE = 'interview_lab_session';
 export interface CookieRequest {
   cookies: Record<string, string | undefined>;
   // Set by AuthGuard for the rest of the request.
-  user?: { id: string; email: string; name: string };
+  user?: AuthUser;
   headers: Record<string, string | string[] | undefined>;
   method: string;
 }

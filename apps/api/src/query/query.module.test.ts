@@ -24,6 +24,13 @@ const ENV: AppEnv = {
     appPassword: 'app-secret',
     poolMax: 1,
   },
+  catalogDatabase: {
+    host: 'localhost',
+    port: 5432,
+    name: 'interview_lab',
+    catalogPassword: 'catalog-secret',
+    poolMax: 1,
+  },
   query: {
     maxRows: 1000,
     statementTimeoutMs: 5000,

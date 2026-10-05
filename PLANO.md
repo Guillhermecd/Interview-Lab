@@ -22,7 +22,7 @@ tabela/gráfico + explicação, em streaming.
 | 08 | Autenticação, tokens por usuário, rate limit, cache | D-07b, D-08 | CONCLUÍDA |
 | 09a | Design: tokens, tema, componentes e chat reestilizado | D-38, D-39, D-41, D-44, D-45, D-46, D-47 | CONCLUÍDA |
 | 09c | Design: dashboard operacional | D-40, D-43, D-48, D-50 a D-55, D-57 | CONCLUÍDA |
-| 09e | Cadastro de materiais e movimentações de estoque | D-56 | PENDENTE |
+| 09e | Cadastro de materiais e movimentações de estoque | D-56, D-58, D-59 | CONCLUÍDA |
 | 09b | Design: tela do chat em três colunas e painel de schema | D-41 | PENDENTE |
 | 09d | Design: chat suspenso no dashboard | D-42 | PENDENTE |
 | 10 | Observabilidade, hardening, deploy e README | D-11 | PENDENTE |
@@ -164,7 +164,7 @@ atualizados; E2E do fluxo principal.
 **Objetivo:** alimentar o dashboard pela própria aplicação, sem abrir o caminho da IA para escrita (D-56).
 **Entregas**
 - Role de escrita própria no banco, com pool separado; `app_readonly` e o chat não mudam.
-- Papel de administrador em `app.users`; só ele cadastra.
+- Papel de administrador em `app.users`, concedido pelo comando `db:promote-admin` (D-58); só ele cadastra.
 - Endpoints: CRUD de materiais (excluir arquiva) e criação/listagem de movimentações, que atualizam o saldo na mesma transação.
 - Tela "Cadastro": materiais (listar, criar, editar, arquivar) e lançamento de movimentações.
 - Invalidação do cache de resultados a cada escrita.

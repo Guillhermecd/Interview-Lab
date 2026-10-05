@@ -7,12 +7,13 @@ import { TopBar } from './components/layout/TopBar';
 import { Spinner } from './components/ui/Spinner';
 import { useTheme } from './hooks/useTheme';
 import { AuthPage } from './pages/AuthPage';
-import { CHAT_PATH, DASHBOARD_PATH, type ChatLocationState } from './routes';
+import { CATALOG_PATH, CHAT_PATH, DASHBOARD_PATH, type ChatLocationState } from './routes';
 
 // Each screen is its own bundle: the chat brings the SQL editor and the
 // dashboard brings the charts, and neither is needed to show the other.
 const ChatPage = lazy(() => import('./pages/ChatPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const CatalogPage = lazy(() => import('./pages/CatalogPage'));
 
 // undefined: still checking the session; null: signed out.
 type Session = AuthUser | null | undefined;
@@ -90,6 +91,8 @@ export function App() {
         <Routes>
           <Route path={DASHBOARD_PATH} element={<DashboardPage />} />
           <Route path={CHAT_PATH} element={<ChatRoute />} />
+          {/* Offered only to who the server says may use it; the API checks again. */}
+          {user.canManageCatalog && <Route path={CATALOG_PATH} element={<CatalogPage />} />}
           <Route path="*" element={<Navigate to={DASHBOARD_PATH} replace />} />
         </Routes>
       </Suspense>

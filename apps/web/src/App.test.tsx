@@ -3,8 +3,9 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { App } from './App';
+import { stubCatalog } from './test/catalog-fixtures';
 import { stubDashboard } from './test/dashboard-fixtures';
-import { FakeApi, jsonResponse, TEST_USER } from './test/fake-api';
+import { FakeApi, jsonResponse, TEST_ADMIN, TEST_USER } from './test/fake-api';
 
 const UNAUTHORIZED = { code: 'UNAUTHORIZED', message: 'Autenticação necessária.' };
 const USAGE = {
@@ -30,7 +31,11 @@ afterEach(() => {
 // The screens are loaded on demand; loading them once here keeps that first
 // load out of the time each test waits for the screen.
 beforeAll(async () => {
-  await Promise.all([import('./pages/DashboardPage'), import('./pages/ChatPage')]);
+  await Promise.all([
+    import('./pages/DashboardPage'),
+    import('./pages/ChatPage'),
+    import('./pages/CatalogPage'),
+  ]);
 });
 
 function signedIn() {
@@ -106,6 +111,37 @@ describe('App session', () => {
 
     await user.click(screen.getByRole('link', { name: 'Dashboard' }));
     expect(await screen.findByRole('heading', { name: 'Operações e vendas' })).toBeInTheDocument();
+  });
+
+  it('offers the registry only to who the server says may use it', async () => {
+    signedIn();
+
+    renderApp('/dashboard');
+
+    const topBar = await screen.findByRole('banner');
+    await screen.findByRole('heading', { name: 'Operações e vendas' });
+    expect(within(topBar).queryByRole('link', { name: 'Cadastro' })).not.toBeInTheDocument();
+  });
+
+  it('sends who may not use the registry back to the dashboard', async () => {
+    signedIn();
+
+    renderApp('/cadastro');
+
+    expect(await screen.findByRole('heading', { name: 'Operações e vendas' })).toBeInTheDocument();
+    expect(api.calls.some((call) => call.key.includes('/api/catalog'))).toBe(false);
+  });
+
+  it('opens the registry for an administrator', async () => {
+    signedIn();
+    stubCatalog(api).on('GET /api/auth/me', () => jsonResponse(TEST_ADMIN));
+    const user = userEvent.setup();
+    renderApp('/dashboard');
+
+    await user.click(await screen.findByRole('link', { name: 'Cadastro' }));
+
+    expect(await screen.findByRole('heading', { name: 'Cadastro' })).toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: 'Materiais' })).toBeInTheDocument();
   });
 
   it('switches the theme from the top bar', async () => {

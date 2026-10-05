@@ -355,12 +355,14 @@ export class AskService {
     schemaVersion: string,
     signal: AbortSignal | undefined,
   ): Promise<QueryResult> {
-    const cached = await this.cache.getResult(sql, schemaVersion);
-    if (cached) {
-      return cached;
+    // The slot is taken before the query runs, so a result computed on data
+    // that changed meanwhile is never stored where later questions look.
+    const slot = await this.cache.lookupResult(sql, schemaVersion);
+    if (slot.cached) {
+      return slot.cached;
     }
     const result = await this.queries.run(sql, signal);
-    await this.cache.setResult(sql, schemaVersion, result);
+    await slot.store(result);
     return result;
   }
 

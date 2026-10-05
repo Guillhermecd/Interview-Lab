@@ -1,6 +1,7 @@
 import type { AuthUser } from '@interview-lab/shared';
 import { NavLink } from 'react-router-dom';
 import type { ThemeMode } from '../../hooks/useTheme';
+import { CATALOG_PATH, CHAT_PATH, DASHBOARD_PATH } from '../../routes';
 import { Button } from '../ui/Button';
 import { MoonIcon, RouteIcon, SunIcon } from '../ui/icons';
 
@@ -12,9 +13,10 @@ interface TopBarProps {
 }
 
 const LINKS = [
-  { to: '/dashboard', label: 'Dashboard' },
-  { to: '/chat', label: 'Converse com seus dados' },
+  { to: DASHBOARD_PATH, label: 'Dashboard' },
+  { to: CHAT_PATH, label: 'Converse com seus dados' },
 ];
+const CATALOG_LINK = { to: CATALOG_PATH, label: 'Cadastro' };
 
 const MAX_INITIALS = 2;
 
@@ -28,6 +30,9 @@ function initialsOf(name: string): string {
 // The bar above every screen: brand, navigation, theme and the signed-in user
 // (D-48: name and initials as the server knows them, and the way out).
 export function TopBar({ user, theme, onToggleTheme, onLogout }: TopBarProps) {
+  // The server says who may use the registry; the link follows that.
+  const links = user.canManageCatalog ? [...LINKS, CATALOG_LINK] : LINKS;
+
   return (
     <header className="flex h-[52px] shrink-0 items-center gap-5 border-b border-line bg-surface px-5">
       <div className="flex shrink-0 items-center gap-[9px]">
@@ -41,7 +46,7 @@ export function TopBar({ user, theme, onToggleTheme, onLogout }: TopBarProps) {
       </div>
 
       <nav aria-label="Principal" className="flex h-full items-stretch gap-1">
-        {LINKS.map((link) => (
+        {links.map((link) => (
           <NavLink
             key={link.to}
             to={link.to}

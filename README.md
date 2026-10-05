@@ -63,6 +63,7 @@ O deploy ainda está em aberto — ver [DECISOES.md](DECISOES.md).
 | Schema | Conteúdo | Quem acessa |
 |---|---|---|
 | `sales` | Dados de demonstração da "Rota Materiais": `regions`, `distribution_centers`, `products`, `customers`, `orders`, `order_items`, `stock_levels`, `stock_movements` | `app_readonly` (somente `SELECT`) |
+| `sales` (escrita) | Só `products`, `stock_levels` e `stock_movements`, sem `DELETE` | `app_catalog_rw`, usada apenas pelo cadastro |
 | `app` | Dados da aplicação: `users`, `conversations`, `messages` e `token_usage` | `app_rw` |
 | `migrations` | Histórico de migrations | Apenas o administrador |
 
@@ -89,7 +90,7 @@ necessárias.
 | 08 | Autenticação, tokens por usuário, rate limit, cache | Concluída |
 | 09a | Design: tokens, tema, componentes e chat reestilizado | Concluída |
 | 09c | Design: dashboard operacional | Concluída |
-| 09e | Cadastro de materiais e movimentações de estoque | Pendente |
+| 09e | Cadastro de materiais e movimentações de estoque | Concluída |
 | 09b | Design: tela do chat em três colunas e painel de schema | Pendente |
 | 09d | Design: chat suspenso no dashboard | Pendente |
 | 10 | Observabilidade, hardening, deploy e README | Pendente |
@@ -127,7 +128,8 @@ docker compose up -d postgres redis
 
 # Migrations + senhas das roles + dados de demonstração
 # (quem já tinha o banco: a migration do dashboard limpa os dados de demonstração;
-#  rode db:setup, ou db:migrate seguido de db:seed, para recarregá-los)
+#  rode db:setup, ou db:migrate seguido de db:seed, para recarregá-los.
+#  Desde o cadastro, o .env precisa de DB_CATALOG_PASSWORD e de um db:provision.)
 pnpm --filter @interview-lab/api db:setup
 
 # API em http://localhost:3000/api/health
@@ -143,6 +145,15 @@ categoria; seis indicadores comparados com o período anterior; faturamento no t
 por região, top 10 materiais, estoque por centro e curva ABC; alertas de ruptura e
 últimas movimentações. Todo número é calculado pela API (regras na D-57). O botão
 "Perguntar" de cada card leva ao chat com a pergunta escrita.
+
+O **cadastro** (`/cadastro`) aparece só para administradores: materiais (criar, editar,
+arquivar, restaurar, estoque mínimo por centro) e lançamento de movimentações de
+estoque, que atualizam o saldo na hora. Para tornar uma conta administradora, crie-a
+pela tela e rode:
+
+```sh
+pnpm --filter @interview-lab/api db:promote-admin voce@exemplo.com
+```
 
 O **chat** (`/chat`) mostra: lista de conversas, pergunta em português, resposta em streaming com o SQL
 gerado, gráfico (barra ou linha, quando faz sentido), tabela de resultado e explicação;
@@ -161,6 +172,12 @@ A API expõe:
 | `GET /api/dashboard/overview` | Indicadores e gráficos de um período (`period`: `7d`, `30d`, `month`, `quarter`, `year` ou `custom` com `from` e `to`), comparados ao período anterior |
 | `GET /api/dashboard/stock-alerts` | Materiais abaixo ou perto do estoque mínimo, agora (`status`, `limit`) |
 | `GET /api/dashboard/stock-movements` | Últimas movimentações de estoque (`type`, `limit`) |
+| `GET /api/catalog/options` | Categorias, unidades e centros para os formulários do cadastro (rotas `/api/catalog`: só administrador, `403` para os demais) |
+| `GET` · `POST /api/catalog/products` | Lista paginada (`search`, `category`, `status`, `page`, `pageSize`) / cria um material |
+| `GET` · `PUT` · `DELETE /api/catalog/products/:id` | Detalhe com estoque por centro / substitui os dados / arquiva (nada é apagado) |
+| `POST /api/catalog/products/:id/restore` | Restaura um material arquivado |
+| `PUT /api/catalog/products/:id/stock-levels/:centerId` | Define o estoque mínimo do material num centro |
+| `GET` · `POST /api/catalog/stock-movements` | Lista paginada / lança uma movimentação e atualiza o saldo na mesma transação |
 | `POST /api/conversations` | Cria uma conversa do usuário |
 | `GET /api/conversations` | Lista as conversas do usuário, da mais recente para a mais antiga |
 | `GET /api/conversations/:id/messages` | Histórico de uma conversa |
@@ -236,7 +253,8 @@ Comandos de banco (`pnpm --filter @interview-lab/api <comando>`):
 | `db:setup` | `db:migrate` + `db:provision` + `db:seed` |
 | `db:migrate` | Aplica as migrations pendentes |
 | `db:migrate:down` | Desfaz todas as migrations |
-| `db:provision` | Define as senhas de `app_readonly` e `app_rw` a partir do `.env` |
+| `db:provision` | Define as senhas de `app_readonly`, `app_rw` e `app_catalog_rw` a partir do `.env` |
+| `db:promote-admin <e-mail>` | Torna uma conta existente administradora do cadastro (D-58) |
 | `db:seed` | Recarrega os dados de demonstração (apaga e insere de novo) |
 
 Se a porta 5432 já estiver em uso na máquina, mude `DB_PORT` no `.env`.

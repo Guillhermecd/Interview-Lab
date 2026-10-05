@@ -124,7 +124,13 @@ describe('security over HTTP', () => {
       const { response } = await register(app, email);
 
       expect(response.statusCode).toBe(201);
-      expect(response.json()).toEqual({ id: expect.any(String) as string, email, name: 'Pessoa' });
+      expect(response.json()).toEqual({
+        id: expect.any(String) as string,
+        email,
+        name: 'Pessoa',
+        // A new account never manages the registry (D-58).
+        canManageCatalog: false,
+      });
       const cookie = response.cookies.find((item) => item.name === SESSION_COOKIE);
       expect(cookie).toMatchObject({
         httpOnly: true,

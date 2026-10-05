@@ -2,12 +2,12 @@ import { Inject, Logger, Module, type DynamicModule, type OnModuleDestroy } from
 import { Redis } from 'ioredis';
 import type { RedisEnv } from '../config/security-env.js';
 import { describeErrorForLog } from '../query/query-error.js';
+import { REDIS, type RedisClient } from './redis.tokens.js';
+import { SalesDataVersion } from './sales-data-version.js';
 
-export const REDIS = Symbol('REDIS');
-
-// The commands this application uses. Depending on this instead of the whole
-// client keeps the Redis-backed classes easy to test.
-export type RedisClient = Pick<Redis, 'get' | 'set' | 'del' | 'multi' | 'quit'>;
+// The token and the client type live in redis.tokens.ts, so classes provided
+// by this module can depend on them without importing the module itself.
+export { REDIS, type RedisClient };
 
 export function createRedis(env: RedisEnv): Redis {
   // Connects on first use, so the API still starts (and its health check
@@ -29,8 +29,8 @@ export class RedisModule implements OnModuleDestroy {
     return {
       module: RedisModule,
       global: true,
-      providers: [{ provide: REDIS, useFactory: () => createRedis(env) }],
-      exports: [REDIS],
+      providers: [{ provide: REDIS, useFactory: () => createRedis(env) }, SalesDataVersion],
+      exports: [REDIS, SalesDataVersion],
     };
   }
 

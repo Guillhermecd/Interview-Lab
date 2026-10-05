@@ -27,7 +27,7 @@ describe('database migrations', () => {
   function roleNames(): Promise<string[]> {
     return withClient(database.admin, async (client) => {
       const result = await client.query<{ rolname: string }>(
-        "SELECT rolname FROM pg_roles WHERE rolname IN ('app_readonly', 'app_rw') ORDER BY rolname",
+        "SELECT rolname FROM pg_roles WHERE rolname IN ('app_readonly', 'app_rw', 'app_catalog_rw') ORDER BY rolname",
       );
       return result.rows.map((row) => row.rolname);
     });
@@ -53,7 +53,7 @@ describe('database migrations', () => {
     await migrateUp({ connection: database.admin, log: silentLog });
 
     expect(await schemaNames()).toEqual(['app', 'sales']);
-    expect(await roleNames()).toEqual(['app_readonly', 'app_rw']);
+    expect(await roleNames()).toEqual(['app_catalog_rw', 'app_readonly', 'app_rw']);
   });
 
   it('does not let a role authenticate before a password is provisioned', async () => {
@@ -77,7 +77,7 @@ describe('database migrations', () => {
     await migrateTestDatabase(database);
 
     expect(await schemaNames()).toEqual(['app', 'sales']);
-    expect(await roleNames()).toEqual(['app_readonly', 'app_rw']);
+    expect(await roleNames()).toEqual(['app_catalog_rw', 'app_readonly', 'app_rw']);
   });
 });
 
