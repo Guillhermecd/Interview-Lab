@@ -3,23 +3,28 @@ import { formatCell, isNumericType } from '../utils/format';
 
 interface ResultTableProps {
   result: QueryResult;
+  // Shows only the first rows; all of them when absent.
+  maxRows?: number | undefined;
 }
 
-export function ResultTable({ result }: ResultTableProps) {
+export function ResultTable({ result, maxRows }: ResultTableProps) {
   if (result.rows.length === 0) {
-    return <p className="text-sm text-muted">A consulta não retornou nenhuma linha.</p>;
+    return (
+      <p className="px-3 py-2 text-[13px] text-text-2">A consulta não retornou nenhuma linha.</p>
+    );
   }
+  const rows = maxRows === undefined ? result.rows : result.rows.slice(0, maxRows);
 
   return (
-    <div className="max-h-96 overflow-auto rounded-lg border border-border">
-      <table className="w-full border-collapse text-sm">
-        <thead className="sticky top-0 bg-surface-sunken">
+    <div className="max-h-96 overflow-auto">
+      <table className="w-full border-collapse">
+        <thead className="sticky top-0 bg-surface-2">
           <tr>
             {result.columns.map((column, index) => (
               <th
                 key={`${column.name}-${String(index)}`}
                 scope="col"
-                className={`border-b border-border px-3 py-2 font-semibold whitespace-nowrap ${
+                className={`border-b border-line px-3 py-[7px] font-mono text-[11.5px] font-medium whitespace-nowrap text-text-3 ${
                   isNumericType(column.type) ? 'text-right' : 'text-left'
                 }`}
               >
@@ -29,13 +34,13 @@ export function ResultTable({ result }: ResultTableProps) {
           </tr>
         </thead>
         <tbody>
-          {result.rows.map((row, rowIndex) => (
-            <tr key={rowIndex} className="odd:bg-surface even:bg-surface-muted">
+          {rows.map((row, rowIndex) => (
+            <tr key={rowIndex} className="hover:bg-surface-2">
               {result.columns.map((column, columnIndex) => (
                 <td
                   key={columnIndex}
-                  className={`border-b border-border px-3 py-1.5 whitespace-nowrap ${
-                    isNumericType(column.type) ? 'text-right tabular-nums' : 'text-left'
+                  className={`border-b border-line px-3 py-[7px] text-[12.5px] whitespace-nowrap ${
+                    isNumericType(column.type) ? 'text-right font-mono' : 'text-left'
                   }`}
                 >
                   {formatCell(row[columnIndex], column.type)}
