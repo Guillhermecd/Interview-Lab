@@ -5,8 +5,11 @@ interface ErrorMessageProps {
 
 export function ErrorMessage({ message, details }: ErrorMessageProps) {
   return (
-    <div role="alert" className="rounded-lg bg-danger-surface px-3 py-2 text-sm text-danger">
-      <p className="font-medium">{message}</p>
+    <div
+      role="alert"
+      className="rounded-lg border border-line-crit bg-crit-soft px-3.5 py-3 text-[13px] text-text-2"
+    >
+      <p className="text-[13.5px] font-semibold text-text">{message}</p>
       {details && details.length > 0 && (
         <ul className="mt-1 list-disc pl-5">
           {details.map((detail) => (
