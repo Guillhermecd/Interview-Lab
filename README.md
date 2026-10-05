@@ -11,7 +11,7 @@ tabela ou gráfico acompanhada de uma explicação, em streaming.
 > conversas com resposta em streaming, histórico e memória resumida (Fase 05), a
 > interface de chat (Fase 06), a revisão/edição do SQL antes de executar (Fase 07) e
 > autenticação, limites de uso e cache (Fase 08). Observabilidade e deploy ainda estão
-> **planejados**. Este README será expandido na Fase 09 com
+> **planejados**. Este README será expandido na Fase 10 com
 > arquitetura detalhada e GIF de demonstração.
 
 ## Como vai funcionar

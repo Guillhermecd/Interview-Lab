@@ -5,7 +5,16 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['**/dist/**', '**/coverage/**', '**/node_modules/**', 'template/**'] },
+  {
+    ignores: [
+      '**/dist/**',
+      '**/coverage/**',
+      '**/node_modules/**',
+      'template/**',
+      // Design prototypes kept only locally (D-47); not project code.
+      'design_handoff_converse_dados/**',
+    ],
+  },
   js.configs.recommended,
   {
     files: ['**/*.{ts,tsx}'],
