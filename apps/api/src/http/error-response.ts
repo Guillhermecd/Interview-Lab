@@ -94,7 +94,11 @@ export function toErrorResponse(exception: unknown, logger: Logger): ErrorRespon
   if (exception instanceof LimitError) {
     return {
       status: HttpStatus.TOO_MANY_REQUESTS,
-      body: { code: exception.code, message: exception.message },
+      body: {
+        code: exception.code,
+        message: exception.message,
+        retryAfterSeconds: exception.retryAfterSeconds,
+      },
     };
   }
 

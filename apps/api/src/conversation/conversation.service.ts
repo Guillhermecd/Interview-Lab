@@ -60,6 +60,7 @@ function lastEvent(answer: Answer, messageId: string): AnswerStreamEvent {
       status: answer.status,
       attempts: answer.status === 'answered' ? answer.attempts : 0,
       usage: answer.usage,
+      ...(answer.status === 'answered' && { cached: answer.cached }),
     },
   };
 }

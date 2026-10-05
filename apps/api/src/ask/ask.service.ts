@@ -86,6 +86,8 @@ interface Generated<T> {
   sql: string;
   proposedVisualization: ProposedVisualization;
   attempts: number;
+  // True when the SQL came from the cache instead of the LLM.
+  cached: boolean;
   // What the attempt function produced for the accepted SQL.
   outcome: T;
 }
@@ -186,6 +188,7 @@ export class AskService {
       generated.outcome,
       resolveVisualization(generated.proposedVisualization, generated.outcome.columns),
       generated.attempts,
+      generated.cached,
       llm,
     );
   }
@@ -233,6 +236,7 @@ export class AskService {
       result,
       resolveVisualization(input.proposedVisualization, result.columns),
       1,
+      false,
       llm,
     );
   }
@@ -300,6 +304,7 @@ export class AskService {
           sql: generation.sql,
           proposedVisualization: generation.visualization,
           attempts: attemptNumber,
+          cached: false,
           outcome,
         };
       } catch (error) {
@@ -332,6 +337,7 @@ export class AskService {
         sql: cached.sql,
         proposedVisualization: cached.proposedVisualization,
         attempts: 1,
+        cached: true,
         outcome: await attempt(cached.sql, schemaVersion),
       };
     } catch (error) {
@@ -375,6 +381,7 @@ export class AskService {
     result: QueryResult,
     visualization: VisualizationSuggestion,
     attempts: number,
+    cached: boolean,
     llm: MeteredLlm,
   ): AsyncGenerator<AskEvent, AnsweredQuestion> {
     yield { type: 'rows', result, visualization };
@@ -405,6 +412,7 @@ export class AskService {
       explanation: explanation.trim(),
       visualization,
       attempts,
+      cached,
       usage: llm.usage,
     };
   }

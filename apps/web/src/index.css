@@ -1,61 +1,162 @@
 @import 'tailwindcss';
+@import '@fontsource-variable/instrument-sans/wght.css';
+@import '@fontsource-variable/jetbrains-mono/wght.css';
 
 /* Dark mode follows the "dark" class on <html>, set by useTheme. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * Theme tokens (D-29). Components use these names (bg-surface, text-muted...)
- * and never raw colors, so light and dark mode are defined only here.
+ * Theme tokens of the design handoff (D-29, D-38). Components use these names
+ * (bg-surface, text-text-2, border-line...) and never raw colors, so light and
+ * dark mode are defined only here.
  */
 :root {
+  color-scheme: light;
+  --bg: #f3f3f0;
   --surface: #ffffff;
-  --surface-muted: #f4f6f8;
-  --surface-sunken: #eef1f4;
-  --border: #d9dee4;
-  --text: #1b2430;
-  --text-muted: #5b6776;
-  --primary: #2563eb;
-  --primary-hover: #1d4ed8;
-  --primary-text: #ffffff;
-  --danger: #b42318;
-  --danger-surface: #fdecea;
-  --warning-surface: #fff6e0;
-  --chart-1: #2563eb;
+  --surface-2: #f8f8f6;
+  --surface-3: #efefeb;
+  --line: #e3e2dc;
+  --line-2: #cfcec7;
+  --text: #16171a;
+  --text-2: #53565c;
+  --text-3: #73767c;
+  --accent: #3346d3;
+  --accent-hover: #2a3bb8;
+  --accent-soft: #eaecfb;
+  --accent-text: #2c3cb5;
+  --on-accent: #ffffff;
+  --crit: #c42f28;
+  --crit-soft: #fbebea;
+  --warn: #9a5b00;
+  --warn-soft: #fbf0dc;
+  --ok: #1c7548;
+  --ok-soft: #e4f2ea;
+  --code-bg: #f7f7f4;
+  --prev: #c3c2bb;
+  /* Categorical series. */
+  --c1: #3346d3;
+  --c2: #58a6e0;
+  --c3: #8f74d9;
+  --c4: #5fae9b;
+  --c5: #cda86a;
+  /* SQL syntax. */
+  --sx-kw: #3346d3;
+  --sx-fn: #8b3fb8;
+  --sx-str: #1c7548;
+  --sx-num: #b0520a;
+  --sx-com: #8b8d92;
+  --sx-id: #16171a;
+  --shadow-elevated: 0 12px 40px rgba(20, 20, 30, 0.16);
+  --shadow-control: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
 .dark {
-  --surface: #161b22;
-  --surface-muted: #1f252e;
-  --surface-sunken: #0f1318;
-  --border: #303844;
-  --text: #e6eaef;
-  --text-muted: #9aa5b3;
-  --primary: #5b8def;
-  --primary-hover: #7aa3f3;
-  --primary-text: #0f1318;
-  --danger: #f28b82;
-  --danger-surface: #3a1f1f;
-  --warning-surface: #3a311a;
-  --chart-1: #7aa3f3;
+  color-scheme: dark;
+  --bg: #0e0f11;
+  --surface: #16171a;
+  --surface-2: #1b1d20;
+  --surface-3: #24262a;
+  --line: #2a2c30;
+  --line-2: #3a3d42;
+  --text: #ececed;
+  --text-2: #a6a9af;
+  --text-3: #8a8d94;
+  --accent: #7486ff;
+  --accent-hover: #8a99ff;
+  --accent-soft: #1d2240;
+  --accent-text: #a3aeff;
+  --on-accent: #0e0f11;
+  --crit: #f0675f;
+  --crit-soft: #341b1a;
+  --warn: #e5a33c;
+  --warn-soft: #33270f;
+  --ok: #4cc48b;
+  --ok-soft: #12301f;
+  --code-bg: #121315;
+  --prev: #4a4d53;
+  --c1: #7486ff;
+  --c2: #5fb4ec;
+  --c3: #a68cf0;
+  --c4: #6cc2ad;
+  --c5: #d6b77c;
+  --sx-kw: #8b9bff;
+  --sx-fn: #d199f0;
+  --sx-str: #6fd3a0;
+  --sx-num: #f0a868;
+  --sx-com: #6c7077;
+  --sx-id: #dfe0e2;
+  --shadow-elevated: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+
+/* Borders derived from the tokens above; they follow the theme by themselves. */
+:root {
+  --line-review: color-mix(in oklch, var(--accent) 45%, var(--line));
+  --line-blocked: color-mix(in oklch, var(--crit) 40%, var(--line));
+  --line-crit: color-mix(in oklch, var(--crit) 28%, transparent);
+  --line-warn: color-mix(in oklch, var(--warn) 28%, transparent);
+  --line-ok: color-mix(in oklch, var(--ok) 28%, transparent);
+  --line-info: color-mix(in oklch, var(--accent-text) 28%, transparent);
 }
 
 @theme inline {
+  --font-sans: 'Instrument Sans Variable', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+
+  --color-bg: var(--bg);
   --color-surface: var(--surface);
-  --color-surface-muted: var(--surface-muted);
-  --color-surface-sunken: var(--surface-sunken);
-  --color-border: var(--border);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
   --color-text: var(--text);
-  --color-muted: var(--text-muted);
-  --color-primary: var(--primary);
-  --color-primary-hover: var(--primary-hover);
-  --color-on-primary: var(--primary-text);
-  --color-danger: var(--danger);
-  --color-danger-surface: var(--danger-surface);
-  --color-warning-surface: var(--warning-surface);
-  --color-chart-1: var(--chart-1);
+  --color-text-2: var(--text-2);
+  --color-text-3: var(--text-3);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-text: var(--accent-text);
+  --color-on-accent: var(--on-accent);
+  --color-crit: var(--crit);
+  --color-crit-soft: var(--crit-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-code-bg: var(--code-bg);
+  --color-prev: var(--prev);
+  --color-line-review: var(--line-review);
+  --color-line-blocked: var(--line-blocked);
+  --color-line-crit: var(--line-crit);
+  --color-line-warn: var(--line-warn);
+  --color-line-ok: var(--line-ok);
+  --color-line-info: var(--line-info);
+
+  --shadow-elevated: var(--shadow-elevated);
+  --shadow-control: var(--shadow-control);
+
+  --animate-blink: blink 1s steps(1) infinite;
+  --animate-soft-pulse: soft-pulse 1.2s ease-in-out infinite;
+
+  @keyframes blink {
+    50% {
+      opacity: 0;
+    }
+  }
+  @keyframes soft-pulse {
+    0%,
+    100% {
+      opacity: 0.45;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
 }
 
 body {
-  background-color: var(--surface-muted);
+  background-color: var(--bg);
   color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }

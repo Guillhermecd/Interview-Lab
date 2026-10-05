@@ -11,7 +11,7 @@ tabela ou gráfico acompanhada de uma explicação, em streaming.
 > conversas com resposta em streaming, histórico e memória resumida (Fase 05), a
 > interface de chat (Fase 06), a revisão/edição do SQL antes de executar (Fase 07) e
 > autenticação, limites de uso e cache (Fase 08). Observabilidade e deploy ainda estão
-> **planejados**. Este README será expandido na Fase 09 com
+> **planejados**. Este README será expandido na Fase 10 com
 > arquitetura detalhada e GIF de demonstração.
 
 ## Como vai funcionar
@@ -87,7 +87,11 @@ necessárias.
 | 06 | Frontend: chat, tabela, gráfico, editor SQL | Concluída |
 | 07 | Human-in-the-loop (revisar/editar SQL) | Concluída |
 | 08 | Autenticação, tokens por usuário, rate limit, cache | Concluída |
-| 09 | Observabilidade, hardening, deploy e README | Pendente |
+| 09a | Design: tokens, tema, componentes e chat reestilizado | Concluída |
+| 09b | Design: tela do chat em três colunas e painel de schema | Pendente |
+| 09c | Design: dashboard operacional | Pendente |
+| 09d | Design: chat suspenso no dashboard | Pendente |
+| 10 | Observabilidade, hardening, deploy e README | Pendente |
 
 Entregas e critérios de verificação de cada fase estão em [PLANO.md](PLANO.md).
 
@@ -165,7 +169,8 @@ e pelo executor, exige login e só existe com `INTERNAL_QUERY_ENDPOINT_ENABLED=t
   limite de tentativas por e-mail.
 - **Antes de qualquer chamada à LLM**, cada usuário passa por um limite de perguntas por
   minuto e por uma cota diária de tokens (padrões: 10/min e 200 mil/dia). Acima disso, a
-  API responde `429` sem chamar a LLM.
+  API responde `429` sem chamar a LLM, com `retryAfterSeconds`: os segundos até o
+  limite liberar (fim do minuto) ou a cota renovar (meia-noite UTC).
 - **Consumo registrado** por usuário e conversa, inclusive as chamadas de resumo da
   memória.
 - **Cache no Redis** de perguntas repetidas (o SQL gerado, por 1 hora) e de resultados
@@ -239,7 +244,7 @@ Server-Sent Events, nesta ordem:
 | `rows` | Colunas, linhas e a sugestão de visualização |
 | `token` | Um pedaço da explicação; vários eventos, na ordem |
 | `review` | Modo revisão: o SQL está pronto e espera aprovação; nada foi executado |
-| `done` | Fim: id da mensagem, tentativas, tokens gastos e, após uma revisão, se o SQL foi editado |
+| `done` | Fim: id da mensagem, tentativas, tokens gastos, se o SQL veio do cache (`cached`) e, após uma revisão, se o SQL foi editado |
 | `error` | Encerra o stream a qualquer momento, no formato padrão de erro |
 
 ```sh
@@ -256,11 +261,12 @@ curl -N -b cookies.txt -X POST http://localhost:3000/api/conversations/$ID/messa
 
 ### Revisar o SQL antes de executar
 
-Com a opção "Revisar o SQL antes de executar" ligada na tela (`mode: "review"` na API),
-o SQL gerado — já aprovado uma vez pela guarda — aparece num editor e só roda quando o
-usuário clicar em "Executar", do jeito que veio ou editado. O SQL enviado passa de novo
-pela guarda no servidor: o frontend nunca é fronteira de segurança. Se for recusado, a
-revisão continua aberta com o motivo. O histórico registra se o SQL foi editado e guarda
+Com a opção "Revisar SQL antes de executar" ligada na tela (`mode: "review"` na API),
+o SQL gerado — já aprovado uma vez pela guarda — aparece para revisão e só roda quando o
+usuário clicar em "Aprovar e executar", do jeito que veio ou depois de "Editar". Também
+dá para cancelar: nada é consultado e a revisão pode ser reaberta. O SQL enviado passa de
+novo pela guarda no servidor: o frontend nunca é fronteira de segurança. Se for recusado,
+a revisão continua aberta com o motivo, e o mesmo texto não pode ser reenviado. O histórico registra se o SQL foi editado e guarda
 o SQL gerado originalmente (auditoria).
 
 Perguntas seguintes na mesma conversa enxergam as anteriores ("e só da região Sul?").

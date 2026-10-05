@@ -38,7 +38,7 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Data:** 2026-10-02
 - **Motivo:** Anthropic e OpenAI não têm uso gratuito de API; o Gemini tem camada gratuita para os modelos Flash. A interface permite trocar de provedor depois escrevendo uma única classe.
 - **Modelo:** a primeira escolha foi `gemini-3.8-flash` (faixa "equilibrada"), mas a camada gratuita dele permite só 20 requisições por dia, e cada pergunta usa 2 a 3. Trocado para `gemini-3.5-flash-lite`, que passou na avaliação manual da Fase 04.
-- **Ponto de atenção:** na camada gratuita o Google usa os dados enviados para melhorar seus produtos. Hoje são perguntas, o schema e linhas dos dados de demonstração. Rever antes de usar dados reais ou publicar (Fase 09).
+- **Ponto de atenção:** na camada gratuita o Google usa os dados enviados para melhorar seus produtos. Hoje são perguntas, o schema e linhas dos dados de demonstração. Rever antes de usar dados reais ou publicar (Fase 10).
 
 ### D-04 — Parser SQL
 - **Opções:** `node-sql-parser` | `pgsql-ast-parser` | `libpg-query` (parser real do Postgres)
@@ -117,7 +117,7 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 
 ### D-11 — Deploy
 - **Opções:** AWS Lightsail | VPS com Docker + Traefik | outro
-- **Status:** PENDENTE (decidir só na Fase 09)
+- **Status:** PENDENTE (decidir só na Fase 10)
 
 ### D-12 — Política de branches e PR
 - **Proposta:** `feature/fase-XX-nome`, Conventional Commits, squash merge, CI obrigatório, merge feito pelo Guilherme.
@@ -320,3 +320,89 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Escolha:** contador próprio no Redis (`INCR` + `EXPIRE` atômicos) por usuário e minuto
 - **Data:** 2026-10-03
 - **Motivo:** poucas linhas e fácil de testar. Limitação aceita: janela fixa permite até 2x o limite na virada do minuto.
+
+### D-38 — Entrada do handoff de design no plano
+- **Contexto:** o handoff `design_handoff_converse_dados/` (redesign do chat, dashboard operacional e chat suspenso) não estava no `PLANO.md`.
+- **Opções:** nova Fase 09 "Design" em quatro PRs, com o deploy passando a Fase 10 | um PR único | depois do deploy
+- **Status:** DECIDIDA
+- **Escolha:** nova **Fase 09 — Design**, em quatro PRs: 09a (tokens, tema, componentes e chat reestilizado), 09b (`/chat` em três colunas com painel de schema), 09c (dashboard), 09d (chat suspenso). Observabilidade, hardening e deploy passam a ser a **Fase 10**.
+- **Data:** 2026-10-05
+- **Motivo:** PRs pequenos e revisáveis; o deploy publica o produto já com a interface final.
+- **Consequência:** cada PR tem a própria branch (`feature/fase-09a-…`) e o próprio relatório (`docs/relatorios/fase-09a.md`).
+
+### D-39 — Camada de dados do handoff
+- **Contexto:** o `PROMPT.md` do handoff pede um serviço `chatApi` implementado com mocks.
+- **Opções:** seguir o prompt e simular a API | usar o backend real que já existe
+- **Status:** DECIDIDA
+- **Escolha:** a interface nova é construída sobre o fluxo real (`ConversationService`, `useChat`, `chat-state`, SSE com modo de revisão). Mocks existem apenas nos testes (`src/test/fake-api.ts` e `e2e/fake-backend.ts`).
+- **Data:** 2026-10-05
+- **Motivo:** o prompt foi escrito para um projeto sem backend; aqui a API já existe e é a fonte da verdade.
+- **Consequência:** os números mostrados na tela (limite por minuto, cota diária, tempo limite) vêm do backend — 10/min e 200 mil tokens (D-34) —, nunca dos valores do protótipo (20/min, 500 mil). O streaming segue o ritmo real dos tokens, sem atraso artificial, e a contagem de tokens só aparece com o valor enviado no evento `done`.
+
+### D-40 — Dados do dashboard
+- **Contexto:** o dashboard do handoff mostra centros de distribuição, estoque, giro, ruptura, movimentações, curva ABC e entrega no prazo. O schema `sales` só tem `regions`, `products`, `customers`, `orders` e `order_items`.
+- **Opções:** (A) ampliar o schema `sales`, o seed e criar endpoints de agregação | (B) dashboard só com o que existe (cerca de 2 KPIs e 3 gráficos) | (C) dados fixos no frontend
+- **Status:** DECIDIDA
+- **Escolha:** **A** — ampliar o schema e o seed e expor endpoints de agregação, na Fase 09c.
+- **Data:** 2026-10-05
+- **Motivo:** é a única opção que entrega o dashboard do handoff. A opção C colocaria dados e cálculos de negócio no frontend, contra a fronteira definida no template.
+- **Custo aceito:** nova migration, seed maior, tabelas novas na allowlist da guarda SQL, contexto do prompt da LLM maior e revisão da D-05. O detalhe das tabelas novas é perguntado antes de começar a 09c.
+
+### D-41 — Mudanças no contrato da API para o novo chat
+- **Opções:** cada item abaixo pode ser adicionado ao contrato ou o estado correspondente fica fora da tela
+- **Status:** DECIDIDA
+- **Escolha:** adicionar (1) `GET /api/schema`, com as tabelas e colunas expostas; (2) `cached` no evento `done`; (3) `retryAfterSeconds` nos erros de limite de uso (`RATE_LIMITED` e `QUOTA_EXCEEDED`); (4) o status da última resposta em cada item da lista de conversas. **Não** adicionar a posição do trecho recusado pela guarda SQL: o bloqueio mostra só o motivo.
+- **Data:** 2026-10-05
+- **Motivo:** os quatro itens alimentam estados obrigatórios do handoff (painel de schema, selo "Resposta do cache", contagem regressiva do rate limit, badges da lista) com dados que só o backend conhece. A posição do trecho exigiria mexer na guarda SQL, que é caminho de segurança, por um ganho só visual.
+- **Fases:** (2) e (3) na 09a; (1) e (4) na 09b.
+- **Alcance do item (3), registrado na 09a:** a recomendação aprovada citava só `RATE_LIMITED`. O campo também vai em `QUOTA_EXCEEDED` (segundos até a meia-noite UTC), porque o alerta de cota do handoff mostra "Renova em". Como o limite de tentativas de login usa o mesmo erro `RATE_LIMITED`, a resposta 429 do login passa a trazer o campo também.
+
+### D-42 — Contexto do "Perguntar sobre isto"
+- **Opções:** prefixar o contexto no texto da pergunta | campo novo em `AskQuestionRequest`
+- **Status:** DECIDIDA
+- **Escolha:** prefixar no texto da pergunta, sem mudar o contrato.
+- **Data:** 2026-10-05
+- **Motivo:** a LLM recebe o contexto como parte da pergunta e o histórico guarda exatamente o que foi enviado.
+
+### D-43 — Roteador do frontend
+- **Opções:** `react-router-dom` | roteador próprio
+- **Status:** DECIDIDA
+- **Escolha:** `react-router-dom`, adicionado na Fase 09b, quando passam a existir duas telas (`/dashboard` e `/chat`).
+- **Data:** 2026-10-05
+- **Motivo:** biblioteca padrão, já prevista no template.
+
+### D-44 — Fontes
+- **Opções:** `@fontsource` (arquivos servidos pela própria aplicação) | Google Fonts por CDN | arquivos copiados para o repositório
+- **Status:** DECIDIDA
+- **Escolha:** `@fontsource-variable/instrument-sans` e `@fontsource-variable/jetbrains-mono`.
+- **Data:** 2026-10-05
+- **Motivo:** nenhuma requisição a terceiros em tempo de execução e versão fixada pelo lockfile.
+
+### D-45 — Ícones
+- **Opções:** SVG inline | Lucide
+- **Status:** DECIDIDA
+- **Escolha:** SVG inline, num único arquivo de componentes de ícone (16×16, traço de 1.6).
+- **Data:** 2026-10-05
+- **Motivo:** nenhuma dependência nova para cerca de vinte ícones.
+
+### D-46 — Realce e edição de SQL no novo design
+- **Opções:** CodeMirror 6, já instalado, com as cores do tema | textarea com um highlighter novo
+- **Status:** DECIDIDA
+- **Escolha:** CodeMirror 6 (D-30), com as cores de sintaxe do handoff definidas como tokens do tema.
+- **Data:** 2026-10-05
+- **Motivo:** nenhuma dependência nova e um único componente para ver e editar SQL.
+
+### D-47 — Pasta do handoff no repositório público
+- **Opções:** commitar tudo | só o `README.md` | ignorar tudo
+- **Status:** DECIDIDA
+- **Escolha:** commitar `design_handoff_converse_dados/README.md` e `PROMPT.md`; a pasta `design_handoff_converse_dados/design/` fica apenas local (listada no `.gitignore`).
+- **Data:** 2026-10-05
+- **Motivo:** o `README.md` é a especificação contra a qual os PRs são conferidos; os protótipos dependem de `support.js`, que é o runtime da ferramenta de design (código de terceiros).
+- **Ponto de atenção:** um clone novo não terá os protótipos em HTML.
+
+### D-48 — Identidade na barra superior
+- **Contexto:** o protótipo mostra "Carla Souza · Gerente de operações"; `AuthUser` tem nome e e-mail, sem cargo.
+- **Status:** DECIDIDA
+- **Escolha:** mostrar as iniciais e o nome do usuário autenticado, sem cargo, e manter a ação de sair.
+- **Data:** 2026-10-05
+- **Motivo:** a tela só mostra o que o backend informa.

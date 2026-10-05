@@ -1,6 +1,16 @@
 import type { QueryResult } from '@interview-lab/shared';
 import { describe, expect, it } from 'vitest';
-import { applyAnswerEvent, itemsFromMessages, newAnswer, startReviewExecution } from './chat-state';
+import {
+  applyAnswerEvent,
+  cancelReview,
+  editReviewDraft,
+  itemsFromMessages,
+  newAnswer,
+  reopenReview,
+  startReviewExecution,
+} from './chat-state';
+
+const STARTED_AT = '2026-10-05T12:00:00.000Z';
 
 const RESULT: QueryResult = {
   columns: [{ name: 'regiao', type: 'text' }],
@@ -12,7 +22,7 @@ const RESULT: QueryResult = {
 
 describe('applyAnswerEvent', () => {
   it('builds the answer from the stream events, in order', () => {
-    let answer = newAnswer('local-1');
+    let answer = newAnswer('local-1', STARTED_AT);
     answer = applyAnswerEvent(answer, { event: 'sql', data: { sql: 'SELECT bad', attempt: 1 } });
     answer = applyAnswerEvent(answer, { event: 'sql', data: { sql: 'SELECT good', attempt: 2 } });
     answer = applyAnswerEvent(answer, {
@@ -28,6 +38,7 @@ describe('applyAnswerEvent', () => {
         status: 'answered',
         attempts: 2,
         usage: { inputTokens: 1, outputTokens: 1, calls: 3 },
+        cached: true,
       },
     });
 
@@ -36,6 +47,9 @@ describe('applyAnswerEvent', () => {
       id: 'local-1',
       messageId: '42',
       status: 'answered',
+      time: STARTED_AT,
+      usage: { inputTokens: 1, outputTokens: 1, calls: 3 },
+      cached: true,
       sqlAttempts: ['SELECT bad', 'SELECT good'],
       result: RESULT,
       visualization: { type: 'table' },
@@ -47,7 +61,7 @@ describe('applyAnswerEvent', () => {
   });
 
   it('records the error of an error event', () => {
-    const answer = applyAnswerEvent(newAnswer('local-1'), {
+    const answer = applyAnswerEvent(newAnswer('local-1', STARTED_AT), {
       event: 'error',
       data: {
         code: 'QUERY_REJECTED',
@@ -59,10 +73,20 @@ describe('applyAnswerEvent', () => {
     expect(answer).toMatchObject({
       status: 'error',
       error: {
+        code: 'QUERY_REJECTED',
         message: 'A consulta foi recusada.',
         details: [{ field: 'sql', message: 'Tabela não disponível.' }],
       },
     });
+  });
+
+  it('keeps how long to wait when a usage limit refuses the question', () => {
+    const answer = applyAnswerEvent(newAnswer('local-1', STARTED_AT), {
+      event: 'error',
+      data: { code: 'RATE_LIMITED', message: 'Muitas requisições.', retryAfterSeconds: 42 },
+    });
+
+    expect(answer.error).toMatchObject({ code: 'RATE_LIMITED', retryAfterSeconds: 42 });
   });
 });
 
@@ -91,24 +115,26 @@ describe('itemsFromMessages', () => {
     ]);
 
     expect(items).toEqual([
-      { kind: 'question', id: '1', text: 'Quais regiões?' },
+      { kind: 'question', id: '1', text: 'Quais regiões?', time: '2026-10-03T10:00:00.000Z' },
       {
         kind: 'answer',
         id: '2',
         messageId: '2',
         status: 'answered',
+        time: '2026-10-03T10:00:01.000Z',
         sqlAttempts: ['SELECT name FROM regions'],
         explanation: 'São cinco.',
         visualization: { type: 'table' },
         rowCount: 5,
         fromHistory: true,
       },
-      { kind: 'question', id: '3', text: 'E o estoque?' },
+      { kind: 'question', id: '3', text: 'E o estoque?', time: '2026-10-03T10:01:00.000Z' },
       {
         kind: 'answer',
         id: '4',
         messageId: '4',
         status: 'error',
+        time: '2026-10-03T10:01:01.000Z',
         sqlAttempts: [],
         explanation: '',
         error: { message: 'O serviço de IA está indisponível no momento.' },
@@ -122,7 +148,7 @@ describe('review mode state', () => {
   const REVIEW_SQL = 'SELECT name FROM regions';
 
   function pendingAnswer() {
-    return applyAnswerEvent(newAnswer('local-1'), {
+    return applyAnswerEvent(newAnswer('local-1', STARTED_AT), {
       event: 'review',
       data: { messageId: '7', sql: REVIEW_SQL },
     });
@@ -150,8 +176,38 @@ describe('review mode state', () => {
       reviewSql: REVIEW_SQL,
       reviewDraft: 'DELETE FROM regions',
       executingReview: false,
-      error: { message: 'Recusada.' },
+      error: { code: 'QUERY_REJECTED', message: 'Recusada.' },
     });
+  });
+
+  it('drops what the server said about a draft once the user changes it', () => {
+    const refused = applyAnswerEvent(startReviewExecution(pendingAnswer(), 'DELETE FROM regions'), {
+      event: 'error',
+      data: { code: 'QUERY_REJECTED', message: 'Recusada.' },
+    });
+
+    const edited = editReviewDraft(refused, 'SELECT 1');
+    expect(edited.reviewDraft).toBe('SELECT 1');
+    expect(edited.error).toBeUndefined();
+
+    const undone = editReviewDraft(edited, undefined);
+    expect(undone.reviewDraft).toBeUndefined();
+    expect(undone.reviewSql).toBe(REVIEW_SQL);
+  });
+
+  it('cancels a pending review on screen and lets it be reviewed again', () => {
+    const cancelled = cancelReview(pendingAnswer());
+    expect(cancelled.status).toBe('cancelled');
+    expect(cancelled.messageId).toBe('7');
+
+    expect(reopenReview(cancelled).status).toBe('pending_review');
+  });
+
+  it('does not reopen an answer that was stopped outside review mode', () => {
+    const stopped = { ...newAnswer('local-2', STARTED_AT), status: 'cancelled' as const };
+
+    expect(reopenReview(stopped).status).toBe('cancelled');
+    expect(cancelReview(stopped).status).toBe('cancelled');
   });
 
   it('records the generated SQL when the user edited it', () => {

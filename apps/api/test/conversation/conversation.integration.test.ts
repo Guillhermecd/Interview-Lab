@@ -155,6 +155,7 @@ describe('conversations over HTTP', () => {
         status: 'answered',
         attempts: 1,
         usage: { inputTokens: 200, outputTokens: 40, calls: 2 },
+        cached: false,
       });
     });
 

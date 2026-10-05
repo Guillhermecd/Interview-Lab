@@ -18,7 +18,7 @@ interface FormError {
 }
 
 const INPUT_CLASS =
-  'w-full rounded-lg border border-border bg-surface-muted px-3 py-2 text-sm focus:border-primary focus:outline-none';
+  'h-8 w-full rounded-md border border-line-2 bg-surface px-3 text-[13px] focus:border-accent focus:outline-2 focus:outline-offset-[-1px] focus:outline-accent';
 
 export function AuthPage({ onSignedIn }: AuthPageProps) {
   const [mode, setMode] = useState<Mode>('login');
@@ -65,11 +65,11 @@ export function AuthPage({ onSignedIn }: AuthPageProps) {
           void submit(event);
         }}
         aria-label={title}
-        className="w-full max-w-sm space-y-4 rounded-xl border border-border bg-surface p-6"
+        className="w-full max-w-sm space-y-4 rounded-lg border border-line bg-surface p-6"
       >
         <div className="space-y-1">
           <h1 className="text-lg font-semibold">Converse com seus dados</h1>
-          <h2 className="text-sm text-muted">{title}</h2>
+          <h2 className="text-sm text-text-2">{title}</h2>
         </div>
 
         {error && Object.keys(error.fields).length === 0 && (
@@ -89,7 +89,7 @@ export function AuthPage({ onSignedIn }: AuthPageProps) {
               maxLength={100}
               className={INPUT_CLASS}
             />
-            {error?.fields.name && <span className="text-danger">{error.fields.name}</span>}
+            {error?.fields.name && <span className="text-crit">{error.fields.name}</span>}
           </label>
         )}
 
@@ -105,7 +105,7 @@ export function AuthPage({ onSignedIn }: AuthPageProps) {
             required
             className={INPUT_CLASS}
           />
-          {error?.fields.email && <span className="text-danger">{error.fields.email}</span>}
+          {error?.fields.email && <span className="text-crit">{error.fields.email}</span>}
         </label>
 
         <label className="block space-y-1 text-sm">
@@ -121,16 +121,16 @@ export function AuthPage({ onSignedIn }: AuthPageProps) {
             minLength={mode === 'register' ? 8 : undefined}
             className={INPUT_CLASS}
           />
-          {error?.fields.password && <span className="text-danger">{error.fields.password}</span>}
+          {error?.fields.password && <span className="text-crit">{error.fields.password}</span>}
         </label>
 
         <Button type="submit" disabled={sending} className="w-full">
           {title}
         </Button>
 
-        <p className="text-center text-sm text-muted">
+        <p className="text-center text-sm text-text-2">
           {mode === 'login' ? 'Ainda não tem conta?' : 'Já tem conta?'}{' '}
-          <button type="button" onClick={switchMode} className="text-primary underline">
+          <button type="button" onClick={switchMode} className="text-accent-text underline">
             {mode === 'login' ? 'Criar conta' : 'Entrar'}
           </button>
         </p>

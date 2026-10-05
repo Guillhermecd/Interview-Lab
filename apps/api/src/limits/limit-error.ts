@@ -8,7 +8,11 @@ const MESSAGES: Record<LimitErrorCode, string> = {
 
 // Refused because of a usage limit, before any call to the LLM (rule 7).
 export class LimitError extends Error {
-  constructor(readonly code: LimitErrorCode) {
+  constructor(
+    readonly code: LimitErrorCode,
+    // Seconds until the limit resets, shown to the user as a countdown.
+    readonly retryAfterSeconds: number,
+  ) {
     super(MESSAGES[code]);
     this.name = 'LimitError';
   }

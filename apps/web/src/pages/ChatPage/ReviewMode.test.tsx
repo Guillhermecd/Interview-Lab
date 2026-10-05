@@ -1,8 +1,9 @@
 import type { Conversation, QueryResult } from '@interview-lab/shared';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeApi, jsonResponse, sseResponse, TEST_USER } from '../../test/fake-api';
+import { replaceSqlEditorText } from '../../test/sql-editor';
 import { ChatPage } from './ChatPage';
 
 const CONVERSATION: Conversation = {
@@ -43,8 +44,8 @@ async function openConversationAndAsk(question: string, review: boolean) {
   const user = userEvent.setup();
   render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
   await user.click(await screen.findByRole('button', { name: CONVERSATION.title ?? '' }));
-  const toggle = screen.getByRole('checkbox', { name: 'Revisar o SQL antes de executar' });
-  if (toggle instanceof HTMLInputElement && toggle.checked !== review) {
+  const toggle = screen.getByRole('switch', { name: 'Revisar SQL antes de executar' });
+  if ((toggle.getAttribute('aria-checked') === 'true') !== review) {
     await user.click(toggle);
   }
   await user.type(screen.getByLabelText('Pergunta'), question);
@@ -56,14 +57,14 @@ describe('review mode', () => {
   it('is off by default and remembers the choice', async () => {
     const user = userEvent.setup();
     const { unmount } = render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
-    const toggle = screen.getByRole('checkbox', { name: 'Revisar o SQL antes de executar' });
+    const toggle = screen.getByRole('switch', { name: 'Revisar SQL antes de executar' });
     expect(toggle).not.toBeChecked();
 
     await user.click(toggle);
     unmount();
     render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
 
-    expect(screen.getByRole('checkbox', { name: 'Revisar o SQL antes de executar' })).toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Revisar SQL antes de executar' })).toBeChecked();
   });
 
   it('asks in review mode and shows the SQL for approval without running it', async () => {
@@ -80,9 +81,9 @@ describe('review mode', () => {
     await openConversationAndAsk('Quais regiões?', true);
 
     const review = await screen.findByRole('region', { name: 'Revisão do SQL' });
-    expect(within(review).getByRole('textbox', { name: 'SQL para revisar' })).toHaveTextContent(
-      GENERATED_SQL,
-    );
+    expect(within(review).getByLabelText('SQL gerado')).toHaveTextContent(GENERATED_SQL);
+    expect(within(review).getByText('Validado')).toBeInTheDocument();
+    expect(screen.getByText('Aguardando revisão')).toBeInTheDocument();
     expect(api.calls.find((call) => call.key === `POST ${MESSAGES_URL}`)?.body).toEqual({
       question: 'Quais regiões?',
       mode: 'review',
@@ -121,7 +122,7 @@ describe('review mode', () => {
     const user = await openConversationAndAsk('Quais regiões?', true);
     await screen.findByRole('region', { name: 'Revisão do SQL' });
 
-    await user.click(screen.getByRole('button', { name: 'Executar' }));
+    await user.click(screen.getByRole('button', { name: 'Aprovar e executar' }));
 
     expect(await screen.findByText('Duas regiões.')).toBeInTheDocument();
     expect(screen.getByRole('table')).toHaveTextContent('Norte');
@@ -158,13 +159,101 @@ describe('review mode', () => {
     const user = await openConversationAndAsk('Quais regiões?', true);
     await screen.findByRole('region', { name: 'Revisão do SQL' });
 
-    await user.click(screen.getByRole('button', { name: 'Executar' }));
+    await user.click(screen.getByRole('button', { name: 'Aprovar e executar' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Apenas consultas SELECT são permitidas.',
     );
-    expect(screen.getByRole('region', { name: 'Revisão do SQL' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Executar' })).toBeEnabled();
+    const review = screen.getByRole('region', { name: 'Revisão do SQL' });
+    expect(within(review).getByText('Bloqueado')).toBeInTheDocument();
+    // The refused text cannot be sent again; the user fixes it first.
+    expect(screen.getByRole('button', { name: 'Aprovar e executar' })).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: 'Editar' }));
+    replaceSqlEditorText('SQL para revisar', 'SELECT name FROM regions');
+    await user.click(screen.getByRole('button', { name: 'Salvar alterações' }));
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(within(review).queryByText('Bloqueado')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Aprovar e executar' })).toBeEnabled();
+  });
+
+  it('sends the SQL the user edited, and undoes the edit on request', async () => {
+    api
+      .on(`POST ${MESSAGES_URL}`, (init) =>
+        sseResponse(
+          [{ event: 'review', data: { messageId: '7', sql: GENERATED_SQL } }],
+          init.signal,
+        ),
+      )
+      .on(`POST ${EXECUTE_URL}`, (init) =>
+        sseResponse(
+          [
+            { event: 'rows', data: { result: RESULT, visualization: { type: 'table' } } },
+            { event: 'token', data: { text: 'Uma região.' } },
+            {
+              event: 'done',
+              data: {
+                messageId: '7',
+                status: 'answered',
+                attempts: 1,
+                usage: { inputTokens: 1, outputTokens: 1, calls: 1 },
+                edited: true,
+              },
+            },
+          ],
+          init.signal,
+        ),
+      );
+    const user = await openConversationAndAsk('Quais regiões?', true);
+    const review = await screen.findByRole('region', { name: 'Revisão do SQL' });
+    const edited = `${GENERATED_SQL} LIMIT 1`;
+
+    await user.click(within(review).getByRole('button', { name: 'Editar' }));
+    replaceSqlEditorText('SQL para revisar', edited);
+    await user.click(screen.getByRole('button', { name: 'Salvar alterações' }));
+
+    expect(within(review).getByText('Editado por você')).toBeInTheDocument();
+    // The edited text has not been checked by the server yet.
+    expect(within(review).queryByText('Validado')).not.toBeInTheDocument();
+
+    await user.click(within(review).getByRole('button', { name: 'Desfazer edição' }));
+    expect(within(review).queryByText('Editado por você')).not.toBeInTheDocument();
+    expect(within(review).getByLabelText('SQL gerado')).toHaveTextContent(GENERATED_SQL);
+
+    await user.click(within(review).getByRole('button', { name: 'Editar' }));
+    replaceSqlEditorText('SQL para revisar', edited);
+    await user.click(screen.getByRole('button', { name: 'Salvar alterações' }));
+    await user.click(screen.getByRole('button', { name: 'Aprovar e executar' }));
+
+    expect(await screen.findByText('Uma região.')).toBeInTheDocument();
+    expect(api.calls.find((call) => call.key === `POST ${EXECUTE_URL}`)?.body).toEqual({
+      sql: edited,
+    });
+    expect(screen.getByText('Editado por você')).toBeInTheDocument();
+  });
+
+  it('never runs the SQL when the user cancels the review, and lets them review again', async () => {
+    api.on(`POST ${MESSAGES_URL}`, (init) =>
+      sseResponse([{ event: 'review', data: { messageId: '7', sql: GENERATED_SQL } }], init.signal),
+    );
+    const user = await openConversationAndAsk('Quais regiões?', true);
+    await screen.findByRole('region', { name: 'Revisão do SQL' });
+
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }));
+
+    expect(
+      screen.getByText('Você cancelou a execução. Nada foi consultado no banco.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Revisão do SQL' })).not.toBeInTheDocument();
+    expect(api.calls.some((call) => call.key === `POST ${EXECUTE_URL}`)).toBe(false);
+
+    await user.click(screen.getByRole('button', { name: 'Revisar de novo' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('region', { name: 'Revisão do SQL' })).toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: 'Aprovar e executar' })).toBeEnabled();
   });
 
   it('marks an executed SQL that the user edited', async () => {
@@ -228,7 +317,7 @@ describe('review mode', () => {
     await user.click(await screen.findByRole('button', { name: CONVERSATION.title ?? '' }));
 
     expect(await screen.findByRole('region', { name: 'Revisão do SQL' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Executar' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Aprovar e executar' })).toBeEnabled();
   });
 });
 

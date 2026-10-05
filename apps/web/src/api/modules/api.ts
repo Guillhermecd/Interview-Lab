@@ -31,12 +31,14 @@ export function onUnauthorized(handler: (() => void) | undefined): void {
 export class ApiError extends Error {
   readonly code: string;
   readonly details: ApiErrorBody['details'];
+  readonly retryAfterSeconds: ApiErrorBody['retryAfterSeconds'];
 
   constructor(body: ApiErrorBody) {
     super(body.message);
     this.name = 'ApiError';
     this.code = body.code;
     this.details = body.details;
+    this.retryAfterSeconds = body.retryAfterSeconds;
   }
 }
 
