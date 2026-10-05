@@ -114,7 +114,8 @@ describe('API over HTTP', () => {
             field: 'sql',
             message:
               'A tabela "invoices" não está disponível para consulta. ' +
-              'Tabelas disponíveis: regions, products, customers, orders, order_items.',
+              'Tabelas disponíveis: regions, products, customers, orders, order_items, ' +
+              'distribution_centers, stock_levels, stock_movements.',
           },
         ],
       });

@@ -53,7 +53,9 @@ test('takes a question about a card to the chat, written but not sent', async ({
   await page.getByRole('button', { name: 'Perguntar sobre isto: Alertas de ruptura' }).click();
 
   await expect(page).toHaveURL(/\/chat$/);
-  await expect(page.getByLabel('Pergunta')).toHaveValue(
+  // By role: the dashboard, still on screen while the chat loads, has many
+  // "Perguntar sobre isto" buttons, and none of them is a text box.
+  await expect(page.getByRole('textbox', { name: /^Pergunta/ })).toHaveValue(
     'Quais materiais estão abaixo do estoque mínimo? (Contexto: Alertas de ruptura)',
   );
   expect(backend.questions).toEqual([]);
