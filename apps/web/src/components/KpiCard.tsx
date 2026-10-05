@@ -88,7 +88,7 @@ export function KpiCard({
       <div className="flex min-w-0 items-center gap-1.5 text-xs">
         <span
           data-sentiment={sentiment}
-          className={`inline-flex h-5 items-center gap-[3px] rounded px-1.5 font-semibold tabular-nums ${SENTIMENT_CLASSES[sentiment]}`}
+          className={`inline-flex h-5 shrink-0 items-center gap-[3px] rounded px-1.5 font-semibold whitespace-nowrap tabular-nums ${SENTIMENT_CLASSES[sentiment]}`}
         >
           {trendPath !== undefined && (
             <svg

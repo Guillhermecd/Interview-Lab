@@ -3,7 +3,7 @@ import { useFakeBackend } from './fake-backend';
 
 test('signs in, sees the chat with the usage, and signs out', async ({ page }) => {
   const backend = await useFakeBackend(page, { signedOut: true });
-  await page.goto('/');
+  await page.goto('/chat');
 
   const form = page.getByRole('form', { name: 'Entrar' });
   await expect(form).toBeVisible();

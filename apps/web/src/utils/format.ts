@@ -120,3 +120,66 @@ export function formatCountdown(totalSeconds: number): string {
   const tail = `${pad(minutes)}:${pad(seconds % SECONDS_PER_MINUTE)}`;
   return hours > 0 ? `${String(hours)}:${tail}` : tail;
 }
+
+const currencyFormat = new Intl.NumberFormat(LOCALE, { style: 'currency', currency: 'BRL' });
+const compactCurrencyFormat = new Intl.NumberFormat(LOCALE, {
+  style: 'currency',
+  currency: 'BRL',
+  notation: 'compact',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+const oneDecimalFormat = new Intl.NumberFormat(LOCALE, {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
+const dayFormat = new Intl.DateTimeFormat(LOCALE, { dateStyle: 'short', timeZone: 'UTC' });
+const shortDayFormat = new Intl.DateTimeFormat(LOCALE, {
+  day: '2-digit',
+  month: '2-digit',
+  timeZone: 'UTC',
+});
+
+const MINUS = '−';
+
+export function formatCurrency(value: number): string {
+  return currencyFormat.format(value);
+}
+
+// Short form for big amounts: 43800000 becomes "R$ 43,8 mi".
+export function formatCompactCurrency(value: number): string {
+  return compactCurrencyFormat.format(value);
+}
+
+export function formatDecimal(value: number): string {
+  return oneDecimalFormat.format(value);
+}
+
+// A change with its sign: "+1,8", "−1,8", "0,0". The unit is added by the caller.
+export function formatSigned(value: number, decimals: 0 | 1 = 1): string {
+  const magnitude =
+    decimals === 0 ? formatInteger(Math.abs(value)) : formatDecimal(Math.abs(value));
+  if (value > 0) {
+    return `+${magnitude}`;
+  }
+  return value < 0 ? `${MINUS}${magnitude}` : magnitude;
+}
+
+// A calendar day sent by the API (YYYY-MM-DD) as dd/mm/aaaa. The day has no
+// time zone: it is shown exactly as it came.
+export function formatDay(day: string): string {
+  const date = new Date(`${day}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime()) ? day : dayFormat.format(date);
+}
+
+// dd/mm, for chart axes.
+export function formatShortDay(day: string): string {
+  const date = new Date(`${day}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime()) ? day : shortDayFormat.format(date);
+}
+
+// Date and time of an ISO 8601 instant, in the user's time zone.
+export function formatDateTime(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? '' : dateTimeFormat.format(date);
+}

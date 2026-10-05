@@ -46,7 +46,7 @@ const REVENUE_BY_REGION: StreamEvent[] = [
 
 test('asks a question and sees SQL, chart, table and explanation', async ({ page }) => {
   const backend = await useFakeBackend(page, { answers: [REVENUE_BY_REGION] });
-  await page.goto('/');
+  await page.goto('/chat');
   await expect(page.getByText('Nenhuma conversa ainda.')).toBeVisible();
 
   await page.getByLabel('Pergunta').fill('Qual foi o faturamento por região no último trimestre?');
@@ -101,7 +101,7 @@ test('starts a question from an example and shows a refusal as an error', async 
       ],
     ],
   });
-  await page.goto('/');
+  await page.goto('/chat');
 
   await page.getByRole('button', { name: 'Quais são os 5 produtos mais vendidos?' }).click();
 
@@ -160,7 +160,7 @@ test('opens a past conversation and continues it', async ({ page }) => {
       ],
     ],
   });
-  await page.goto('/');
+  await page.goto('/chat');
 
   await page.getByRole('button', { name: 'Quantas regiões existem?' }).click();
   await expect(page.getByText('Existem 5 regiões.')).toBeVisible();
@@ -175,7 +175,7 @@ test('opens a past conversation and continues it', async ({ page }) => {
 
 test('switches between light and dark theme', async ({ page }) => {
   await useFakeBackend(page);
-  await page.goto('/');
+  await page.goto('/chat');
   const html = page.locator('html');
   const toggle = page.getByRole('button', { name: /Usar tema/ });
 
