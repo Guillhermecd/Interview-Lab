@@ -4,6 +4,7 @@ import { loadModule } from 'libpg-query';
 import type { AppEnv } from '../config/env.js';
 import { MAX_JOINS, SqlGuard } from '../sql-guard/sql-guard.js';
 import { DatabaseHealth } from './database-health.service.js';
+import { FixedReadQuery } from './fixed-read-query.service.js';
 import { GuardedQueryService } from './guarded-query.service.js';
 import { QueryController } from './query.controller.js';
 import { QueryExecutor } from './query-executor.service.js';
@@ -36,10 +37,13 @@ export class QueryModule implements OnModuleDestroy {
         GuardedQueryService,
         DatabaseHealth,
         SchemaCatalog,
+        FixedReadQuery,
       ],
-      // The pool and QueryExecutor stay private: outside this module, SQL only
-      // runs through GuardedQueryService.
-      exports: [GuardedQueryService, DatabaseHealth, SchemaCatalog],
+      // The pool and QueryExecutor stay private. Outside this module, SQL text
+      // that came from a user or from the LLM only runs through
+      // GuardedQueryService; FixedReadQuery is for statements written in the
+      // code, with values as parameters (D-54).
+      exports: [GuardedQueryService, DatabaseHealth, SchemaCatalog, FixedReadQuery],
     };
   }
 

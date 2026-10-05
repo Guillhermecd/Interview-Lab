@@ -206,3 +206,189 @@ export interface UsageSummary {
   questionsPerMinute: number;
   byConversation: { conversationId: string; title: string | null; tokens: number }[];
 }
+
+// ---------------------------------------------------------------------------
+// Operations dashboard (Phase 09c). Every number arrives computed by the
+// server: totals, comparisons with the previous period, trends and statuses.
+// The client only formats values and draws them.
+
+export const DASHBOARD_PERIODS = ['7d', '30d', 'month', 'quarter', 'year', 'custom'] as const;
+export type DashboardPeriod = (typeof DASHBOARD_PERIODS)[number];
+
+// Calendar days (YYYY-MM-DD) in the time zone of the business, both inclusive.
+export interface DashboardRange {
+  from: string;
+  to: string;
+}
+
+export interface DashboardFilterOptions {
+  distributionCenters: { id: string; name: string; regionId: string }[];
+  regions: { id: string; name: string }[];
+  categories: string[];
+}
+
+export type KpiTrend = 'up' | 'down' | 'flat';
+// Whether the change is good news: a rise in stock days is bad, for example.
+export type KpiSentiment = 'good' | 'bad' | 'neutral';
+
+interface DashboardKpiBase {
+  // Null when it cannot be computed (no deliveries or no outflow in the period).
+  value: number | null;
+  // The same measure in the previous period.
+  previousValue: number | null;
+  // Change against the previous period, in the unit of each indicator.
+  delta: number | null;
+  trend: KpiTrend;
+  sentiment: KpiSentiment;
+  // The measure along the period, oldest first; empty when not available.
+  spark: number[];
+}
+
+// delta: percent.
+export type RevenueKpi = DashboardKpiBase;
+
+// delta: percent.
+export interface OrdersKpi extends DashboardKpiBase {
+  averageTicket: number | null;
+  averageTicketDeltaPercent: number | null;
+}
+
+// Value of the stock at cost, at the end of the period. delta: percent.
+export interface StockValueKpi extends DashboardKpiBase {
+  distributionCenters: number;
+  activeProducts: number;
+}
+
+// Days the stock lasts at the pace of the period. delta: days.
+export interface CoverageKpi extends DashboardKpiBase {
+  turnsPerYear: number | null;
+}
+
+// Products below their minimum stock at the end of the period. delta: items.
+export interface BelowMinimumKpi extends DashboardKpiBase {
+  critical: number;
+  attention: number;
+}
+
+// Percent of the deliveries of the period made on time. delta: percentage points.
+export interface OnTimeDeliveryKpi extends DashboardKpiBase {
+  targetPercent: number;
+  onTimeOrders: number;
+  deliveredOrders: number;
+}
+
+export interface DashboardKpis {
+  revenue: RevenueKpi;
+  orders: OrdersKpi;
+  stockValue: StockValueKpi;
+  coverageDays: CoverageKpi;
+  belowMinimum: BelowMinimumKpi;
+  onTimeDelivery: OnTimeDeliveryKpi;
+}
+
+// One day of the period next to the day in the same position of the previous one.
+export interface RevenuePoint {
+  date: string;
+  revenue: number;
+  cumulative: number;
+  previousDate: string;
+  previousRevenue: number;
+  previousCumulative: number;
+}
+
+export interface RegionRevenue {
+  regionId: string;
+  name: string;
+  revenue: number;
+  previousRevenue: number;
+  deltaPercent: number | null;
+  trend: KpiTrend;
+  sentiment: KpiSentiment;
+}
+
+export interface TopProducts {
+  items: { productId: string; name: string; category: string; revenue: number }[];
+  // Part of the revenue of the period that these products make.
+  sharePercent: number | null;
+}
+
+export interface CenterStock {
+  distributionCenterId: string;
+  name: string;
+  total: number;
+  // One entry per category of `categories`, in the same order.
+  byCategory: number[];
+}
+
+export const ABC_CLASSES = ['A', 'B', 'C'] as const;
+export type AbcClass = (typeof ABC_CLASSES)[number];
+
+export interface AbcCurve {
+  activeProducts: number;
+  classes: { class: AbcClass; products: number; revenueSharePercent: number }[];
+  // Cumulative revenue against the share of products, from the best seller on.
+  points: { productsPercent: number; revenuePercent: number }[];
+  // Where class A and class B end, in percent of the products.
+  classAEndPercent: number;
+  classBEndPercent: number;
+}
+
+export interface DashboardOverview {
+  period: DashboardPeriod;
+  range: DashboardRange;
+  previousRange: DashboardRange;
+  // When this answer was computed (ISO 8601).
+  dataUntil: string;
+  // Categories in a fixed order; charts color them by position.
+  categories: string[];
+  kpis: DashboardKpis;
+  revenueSeries: RevenuePoint[];
+  revenueByRegion: RegionRevenue[];
+  topProducts: TopProducts;
+  stockByCenter: CenterStock[];
+  abc: AbcCurve;
+}
+
+export const STOCK_ALERT_STATUSES = ['critical', 'attention', 'ok'] as const;
+export type StockAlertStatus = (typeof STOCK_ALERT_STATUSES)[number];
+
+export interface StockAlert {
+  productId: string;
+  product: string;
+  unit: string;
+  distributionCenterId: string;
+  distributionCenter: string;
+  quantity: number;
+  minimumQuantity: number;
+  // Days the stock lasts at the average outflow of the last 30 days; null
+  // when nothing left in that time.
+  coverageDays: number | null;
+  status: StockAlertStatus;
+}
+
+export interface StockAlertList {
+  counts: Record<StockAlertStatus, number> & { all: number };
+  items: StockAlert[];
+}
+
+export const STOCK_MOVEMENT_TYPES = ['inbound', 'outbound', 'transfer', 'adjustment'] as const;
+export type StockMovementType = (typeof STOCK_MOVEMENT_TYPES)[number];
+
+export interface StockMovement {
+  id: string;
+  movedAt: string;
+  type: StockMovementType;
+  product: string;
+  unit: string;
+  distributionCenter: string;
+  // Present on transfers only.
+  destinationCenter?: string;
+  // Positive, except for an adjustment that removes stock.
+  quantity: number;
+  responsibleName: string;
+  document: string;
+}
+
+export interface StockMovementList {
+  items: StockMovement[];
+}

@@ -67,10 +67,13 @@ describe('AskService against PostgreSQL', () => {
 
       expect(schema.tables.map((table) => table.name)).toEqual([
         'customers',
+        'distribution_centers',
         'order_items',
         'orders',
         'products',
         'regions',
+        'stock_levels',
+        'stock_movements',
       ]);
     });
 
@@ -83,8 +86,15 @@ describe('AskService against PostgreSQL', () => {
         { name: 'customer_id', type: 'bigint', nullable: false },
         { name: 'status', type: 'text', nullable: false },
         { name: 'ordered_at', type: 'timestamp with time zone', nullable: false },
+        { name: 'distribution_center_id', type: 'bigint', nullable: false },
+        { name: 'expected_delivery_at', type: 'timestamp with time zone', nullable: false },
+        // Null until the order is delivered: the LLM is told so.
+        { name: 'delivered_at', type: 'timestamp with time zone', nullable: true },
       ]);
       expect(orders?.constraints).toContain('FOREIGN KEY (customer_id) REFERENCES customers(id)');
+      expect(orders?.constraints).toContain(
+        'FOREIGN KEY (distribution_center_id) REFERENCES distribution_centers(id)',
+      );
       expect(orders?.constraints.join('\n')).toContain("'cancelled'");
     });
 

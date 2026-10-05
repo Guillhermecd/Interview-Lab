@@ -8,6 +8,8 @@ const MAX_QUESTION_LENGTH = 1000;
 interface QuestionFormProps {
   isAnswering: boolean;
   review: boolean;
+  // Text the composer starts with.
+  initialQuestion?: string | undefined;
   // Set when the server refused the last question for a reason that sending
   // another one will not fix (the daily quota): explains why, and blocks sending.
   blockedReason?: string | undefined;
@@ -19,12 +21,13 @@ interface QuestionFormProps {
 export function QuestionForm({
   isAnswering,
   review,
+  initialQuestion = '',
   blockedReason,
   onReviewChange,
   onAsk,
   onCancel,
 }: QuestionFormProps) {
-  const [question, setQuestion] = useState('');
+  const [question, setQuestion] = useState(initialQuestion);
   const reviewLabelId = useId();
   const trimmed = question.trim();
   const blocked = blockedReason !== undefined;

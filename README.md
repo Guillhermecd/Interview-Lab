@@ -62,7 +62,7 @@ O deploy ainda está em aberto — ver [DECISOES.md](DECISOES.md).
 
 | Schema | Conteúdo | Quem acessa |
 |---|---|---|
-| `sales` | Dados de demonstração: `regions`, `products`, `customers`, `orders`, `order_items` | `app_readonly` (somente `SELECT`) |
+| `sales` | Dados de demonstração da "Rota Materiais": `regions`, `distribution_centers`, `products`, `customers`, `orders`, `order_items`, `stock_levels`, `stock_movements` | `app_readonly` (somente `SELECT`) |
 | `app` | Dados da aplicação: `users`, `conversations`, `messages` e `token_usage` | `app_rw` |
 | `migrations` | Histórico de migrations | Apenas o administrador |
 
@@ -88,8 +88,9 @@ necessárias.
 | 07 | Human-in-the-loop (revisar/editar SQL) | Concluída |
 | 08 | Autenticação, tokens por usuário, rate limit, cache | Concluída |
 | 09a | Design: tokens, tema, componentes e chat reestilizado | Concluída |
+| 09c | Design: dashboard operacional | Concluída |
+| 09e | Cadastro de materiais e movimentações de estoque | Pendente |
 | 09b | Design: tela do chat em três colunas e painel de schema | Pendente |
-| 09c | Design: dashboard operacional | Pendente |
 | 09d | Design: chat suspenso no dashboard | Pendente |
 | 10 | Observabilidade, hardening, deploy e README | Pendente |
 
@@ -125,6 +126,8 @@ cp .env.example .env
 docker compose up -d postgres redis
 
 # Migrations + senhas das roles + dados de demonstração
+# (quem já tinha o banco: a migration do dashboard limpa os dados de demonstração;
+#  rode db:setup, ou db:migrate seguido de db:seed, para recarregá-los)
 pnpm --filter @interview-lab/api db:setup
 
 # API em http://localhost:3000/api/health
@@ -134,8 +137,14 @@ pnpm --filter @interview-lab/api dev
 pnpm --filter @interview-lab/web dev
 ```
 
-O web (http://localhost:5173) começa pela tela de login/cadastro e depois mostra o
-chat: lista de conversas, pergunta em português, resposta em streaming com o SQL
+O web (http://localhost:5173) começa pela tela de login/cadastro e abre no
+**dashboard** (`/dashboard`): filtros de período, centro de distribuição, região e
+categoria; seis indicadores comparados com o período anterior; faturamento no tempo e
+por região, top 10 materiais, estoque por centro e curva ABC; alertas de ruptura e
+últimas movimentações. Todo número é calculado pela API (regras na D-57). O botão
+"Perguntar" de cada card leva ao chat com a pergunta escrita.
+
+O **chat** (`/chat`) mostra: lista de conversas, pergunta em português, resposta em streaming com o SQL
 gerado, gráfico (barra ou linha, quando faz sentido), tabela de resultado e explicação;
 consumo de tokens do dia; tema claro e escuro. Configure a chave do Gemini e um
 `JWT_SECRET` com 32+ caracteres no `.env`.
@@ -148,6 +157,10 @@ A API expõe:
 | `POST /api/auth/register` · `POST /api/auth/login` | Cria conta / entra; a sessão vai num cookie `HttpOnly` |
 | `POST /api/auth/logout` · `GET /api/auth/me` | Sai (apaga o cookie) / usuário atual |
 | `GET /api/usage` | Tokens gastos hoje, no total e por conversa, e os limites |
+| `GET /api/dashboard/filters` | Centros de distribuição, regiões e categorias para os filtros |
+| `GET /api/dashboard/overview` | Indicadores e gráficos de um período (`period`: `7d`, `30d`, `month`, `quarter`, `year` ou `custom` com `from` e `to`), comparados ao período anterior |
+| `GET /api/dashboard/stock-alerts` | Materiais abaixo ou perto do estoque mínimo, agora (`status`, `limit`) |
+| `GET /api/dashboard/stock-movements` | Últimas movimentações de estoque (`type`, `limit`) |
 | `POST /api/conversations` | Cria uma conversa do usuário |
 | `GET /api/conversations` | Lista as conversas do usuário, da mais recente para a mais antiga |
 | `GET /api/conversations/:id/messages` | Histórico de uma conversa |
@@ -189,7 +202,7 @@ explicitamente liberado é recusado.
 | Um único comando | `SELECT 1; DROP ...` é recusado |
 | Somente `SELECT` | Sem `INSERT`/`UPDATE`/`DELETE` (inclusive dentro de CTE), DDL, `SET`, `EXPLAIN`, `COPY` |
 | Sem `INTO`, `FOR UPDATE`, `WITH RECURSIVE`, `TABLESAMPLE`, parâmetros `$1` | Qualquer construção fora da lista conhecida é recusada |
-| Tabelas | Apenas `regions`, `products`, `customers`, `orders`, `order_items` (schema `sales`) e CTEs em escopo |
+| Tabelas | Apenas `regions`, `products`, `customers`, `orders`, `order_items`, `distribution_centers`, `stock_levels`, `stock_movements` (schema `sales`) e CTEs em escopo |
 | Funções | Lista de permissão: agregadas, janela, data, texto e matemática. `pg_sleep`, `pg_read_file`, `dblink`, `lo_*`, `set_config` e qualquer outra fora da lista são recusadas |
 | Conversões de tipo | Apenas tipos numéricos, texto, booleano, data/hora e intervalo |
 | `JOIN`s | No máximo 5, somando a query inteira |

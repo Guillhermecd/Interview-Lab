@@ -1,7 +1,9 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { App } from './App';
+import { stubDashboard } from './test/dashboard-fixtures';
 import { FakeApi, jsonResponse, TEST_USER } from './test/fake-api';
 
 const UNAUTHORIZED = { code: 'UNAUTHORIZED', message: 'Autenticação necessária.' };
@@ -21,34 +23,101 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  localStorage.clear();
+  document.documentElement.classList.remove('dark');
+});
+
+// The screens are loaded on demand; loading them once here keeps that first
+// load out of the time each test waits for the screen.
+beforeAll(async () => {
+  await Promise.all([import('./pages/DashboardPage'), import('./pages/ChatPage')]);
 });
 
 function signedIn() {
-  api
+  stubDashboard(api)
     .on('GET /api/auth/me', () => jsonResponse(TEST_USER))
     .on('GET /api/conversations', () => jsonResponse({ items: [] }))
     .on('GET /api/usage', () => jsonResponse(USAGE));
+}
+
+function renderApp(path = '/chat') {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <App />
+    </MemoryRouter>,
+  );
 }
 
 describe('App session', () => {
   it('shows the login form when there is no session', async () => {
     api.on('GET /api/auth/me', () => jsonResponse(UNAUTHORIZED, 401));
 
-    render(<App />);
+    renderApp();
 
     expect(await screen.findByRole('form', { name: 'Entrar' })).toBeInTheDocument();
   });
 
-  it('goes straight to the chat with a valid session, showing the user and usage', async () => {
+  it('opens the dashboard with a valid session, showing the user in the top bar', async () => {
     signedIn();
 
-    render(<App />);
+    renderApp('/');
+
+    expect(await screen.findByRole('heading', { name: 'Operações e vendas' })).toBeInTheDocument();
+    const topBar = screen.getByRole('banner');
+    expect(within(topBar).getByText('Ana')).toBeInTheDocument();
+    expect(within(topBar).getByRole('link', { name: 'Dashboard' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
+  it('sends an unknown address to the dashboard', async () => {
+    signedIn();
+
+    renderApp('/nao-existe');
+
+    expect(await screen.findByRole('heading', { name: 'Operações e vendas' })).toBeInTheDocument();
+  });
+
+  it('opens the chat by its address, with the usage of the day', async () => {
+    signedIn();
+
+    renderApp('/chat');
 
     const sidebar = await screen.findByRole('complementary');
-    expect(await within(sidebar).findByText('Ana')).toBeInTheDocument();
     expect(
       await within(sidebar).findByText('Uso hoje: 1.500 de 200.000 tokens'),
     ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('banner')).getByRole('link', { name: 'Converse com seus dados' }),
+    ).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('goes from the dashboard to the chat and back through the top bar', async () => {
+    signedIn();
+    const user = userEvent.setup();
+    renderApp('/dashboard');
+    await screen.findByRole('heading', { name: 'Operações e vendas' });
+
+    await user.click(screen.getByRole('link', { name: 'Converse com seus dados' }));
+    expect(
+      await screen.findByRole('heading', { name: 'Pergunte em português' }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('link', { name: 'Dashboard' }));
+    expect(await screen.findByRole('heading', { name: 'Operações e vendas' })).toBeInTheDocument();
+  });
+
+  it('switches the theme from the top bar', async () => {
+    signedIn();
+    const user = userEvent.setup();
+    renderApp('/dashboard');
+    const toggle = await screen.findByRole('button', { name: 'Usar tema escuro' });
+
+    await user.click(toggle);
+
+    expect(document.documentElement).toHaveClass('dark');
+    expect(screen.getByRole('button', { name: 'Usar tema claro' })).toBeInTheDocument();
   });
 
   it('signs in and opens the chat', async () => {
@@ -64,7 +133,7 @@ describe('App session', () => {
       .on('GET /api/conversations', () => jsonResponse({ items: [] }))
       .on('GET /api/usage', () => jsonResponse(USAGE));
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
     await screen.findByRole('form', { name: 'Entrar' });
 
     await user.type(screen.getByLabelText('E-mail'), 'ana@example.com');
@@ -87,7 +156,7 @@ describe('App session', () => {
         jsonResponse({ code: 'INVALID_CREDENTIALS', message: 'E-mail ou senha incorretos.' }, 401),
       );
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
     await screen.findByRole('form', { name: 'Entrar' });
 
     await user.type(screen.getByLabelText('E-mail'), 'ana@example.com');
@@ -112,7 +181,7 @@ describe('App session', () => {
         ),
       );
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
     await screen.findByRole('form', { name: 'Entrar' });
 
     await user.click(screen.getByRole('button', { name: 'Criar conta' }));
@@ -135,7 +204,7 @@ describe('App session', () => {
     signedIn();
     api.on('POST /api/auth/logout', () => new Response(null, { status: 204 }));
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     await user.click(await screen.findByRole('button', { name: 'Sair' }));
 
@@ -147,7 +216,7 @@ describe('App session', () => {
     signedIn();
     api.on('POST /api/conversations', () => jsonResponse(UNAUTHORIZED, 401));
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
     await screen.findByRole('heading', { name: 'Pergunte em português' });
 
     await user.type(screen.getByLabelText('Pergunta'), 'Quantas regiões?');

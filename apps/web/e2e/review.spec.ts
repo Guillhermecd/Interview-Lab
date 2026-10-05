@@ -38,7 +38,7 @@ const EXECUTION: StreamEvent[] = [
 
 test('reviews, edits and runs the SQL before executing', async ({ page }) => {
   const backend = await useFakeBackend(page, { answers: [REVIEW], executions: [EXECUTION] });
-  await page.goto('/');
+  await page.goto('/chat');
 
   await page.getByRole('switch', { name: 'Revisar SQL antes de executar' }).click();
   await page.getByLabel('Pergunta').fill('Quais regiões começam com N?');
@@ -89,7 +89,7 @@ test('shows the reason and keeps the review open when the edited SQL is refused'
       ],
     ],
   });
-  await page.goto('/');
+  await page.goto('/chat');
   await page.getByRole('switch', { name: 'Revisar SQL antes de executar' }).click();
   await page.getByLabel('Pergunta').fill('Quais regiões?');
   await page.getByRole('button', { name: 'Enviar' }).click();

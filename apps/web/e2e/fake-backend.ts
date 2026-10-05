@@ -5,6 +5,12 @@ import type {
   ConversationMessage,
 } from '@interview-lab/shared';
 import type { Page, Route } from '@playwright/test';
+import {
+  FILTER_OPTIONS,
+  OVERVIEW,
+  STOCK_ALERTS,
+  STOCK_MOVEMENTS,
+} from '../src/test/dashboard-fixtures';
 
 export type StreamEvent = {
   [Name in AnswerStreamEventName]: { event: Name; data: AnswerStreamEvents[Name] };
@@ -71,6 +77,22 @@ export async function useFakeBackend(page: Page, options: FakeBackendOptions = {
       byConversation: [],
     }),
   );
+  // The dashboard: the same answers whatever the filters, and a record of what
+  // was asked, so a test can check the filters reached the API.
+  const dashboardRequests: string[] = [];
+  const dashboard: Record<string, unknown> = {
+    filters: FILTER_OPTIONS,
+    overview: OVERVIEW,
+    'stock-alerts': STOCK_ALERTS,
+    'stock-movements': STOCK_MOVEMENTS,
+  };
+  await page.route('**/api/dashboard/**', async (route) => {
+    const url = new URL(route.request().url());
+    const resource = url.pathname.split('/').at(-1) ?? '';
+    dashboardRequests.push(`${resource}${url.search}`);
+    await json(route, dashboard[resource] ?? {}, resource in dashboard ? 200 : 404);
+  });
+
   const modes: string[] = [];
   // SQL received by the execution endpoint (what the user approved or edited).
   const executedSql: string[] = [];
@@ -115,5 +137,5 @@ export async function useFakeBackend(page: Page, options: FakeBackendOptions = {
     await sse(route, executions.shift() ?? []);
   });
 
-  return { questions, modes, executedSql, logins };
+  return { questions, modes, executedSql, logins, dashboardRequests };
 }

@@ -3,7 +3,6 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  TEST_USER,
   FakeApi,
   jsonResponse,
   openSseResponse,
@@ -82,7 +81,7 @@ describe('ChatPage', () => {
   it('shows the empty state with example questions', async () => {
     api.on(`GET ${CONVERSATIONS_URL}`, () => jsonResponse({ items: [] }));
 
-    render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
+    render(<ChatPage />);
 
     expect(await screen.findByText('Nenhuma conversa ainda.')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Pergunte em português' })).toBeInTheDocument();
@@ -102,7 +101,7 @@ describe('ChatPage', () => {
         return jsonResponse({ ...CONVERSATION, title: null }, 201);
       })
       .on(`POST ${MESSAGES_URL}`, (init) => sseResponse(ANSWER, init.signal));
-    render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
+    render(<ChatPage />);
     await screen.findByText('Nenhuma conversa ainda.');
 
     await askQuestion('Quais são as regiões?');
@@ -155,7 +154,7 @@ describe('ChatPage', () => {
         ]),
       );
     const user = userEvent.setup();
-    render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
+    render(<ChatPage />);
     await user.click(await screen.findByRole('button', { name: CONVERSATION.title ?? '' }));
 
     await askQuestion('Apague a região Sul');
@@ -177,7 +176,7 @@ describe('ChatPage', () => {
           503,
         ),
       );
-    render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
+    render(<ChatPage />);
     await screen.findByText('Nenhuma conversa ainda.');
 
     await askQuestion('Quantas regiões?');
@@ -211,7 +210,7 @@ describe('ChatPage', () => {
         }),
       );
     const user = userEvent.setup();
-    render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
+    render(<ChatPage />);
 
     await user.click(await screen.findByRole('button', { name: CONVERSATION.title ?? '' }));
 
@@ -230,7 +229,7 @@ describe('ChatPage', () => {
         jsonResponse({ code: 'INTERNAL_ERROR', message: 'Ocorreu um erro interno.' }, 500),
       );
     const user = userEvent.setup();
-    render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
+    render(<ChatPage />);
 
     await user.click(await screen.findByRole('button', { name: CONVERSATION.title ?? '' }));
 
@@ -251,7 +250,7 @@ describe('ChatPage', () => {
         );
       });
     const user = userEvent.setup();
-    render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
+    render(<ChatPage />);
     await user.click(await screen.findByRole('button', { name: CONVERSATION.title ?? '' }));
     await askQuestion('Pergunta demorada');
     await screen.findByText(/Executando consulta…/);
@@ -278,7 +277,7 @@ describe('ChatPage', () => {
         );
       });
     const user = userEvent.setup();
-    render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
+    render(<ChatPage />);
     await user.click(await screen.findByRole('button', { name: CONVERSATION.title ?? '' }));
     await askQuestion('Pergunta demorada');
 
@@ -304,7 +303,7 @@ describe('ChatPage', () => {
         return sseResponse(ANSWER, init.signal);
       });
     const user = userEvent.setup();
-    render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
+    render(<ChatPage />);
     await user.click(await screen.findByRole('button', { name: CONVERSATION.title ?? '' }));
 
     await askQuestion('Quais são as regiões?');
@@ -347,7 +346,7 @@ describe('ChatPage', () => {
         ),
       );
     const user = userEvent.setup();
-    render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
+    render(<ChatPage />);
     await user.click(await screen.findByRole('button', { name: CONVERSATION.title ?? '' }));
 
     await askQuestion('Quais são as regiões?');
@@ -361,12 +360,25 @@ describe('ChatPage', () => {
     expect(screen.getByRole('button', { name: 'Enviar' })).toBeDisabled();
   });
 
+  it('starts with a question brought from another screen, written but not sent', async () => {
+    api.on(`GET ${CONVERSATIONS_URL}`, () => jsonResponse({ items: [] }));
+
+    render(<ChatPage initialQuestion="Quais materiais estão abaixo do mínimo?" />);
+    await screen.findByText('Nenhuma conversa ainda.');
+
+    expect(screen.getByLabelText('Pergunta')).toHaveValue(
+      'Quais materiais estão abaixo do mínimo?',
+    );
+    expect(screen.getByRole('button', { name: 'Enviar' })).toBeEnabled();
+    expect(api.calls.some((call) => call.key.startsWith('POST '))).toBe(false);
+  });
+
   it('shows the failure to load the conversation list', async () => {
     api.on(`GET ${CONVERSATIONS_URL}`, () => {
       throw new TypeError('Failed to fetch');
     });
 
-    render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
+    render(<ChatPage />);
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Não foi possível falar com o servidor. Verifique sua conexão.',

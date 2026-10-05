@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { AppEnv } from '../config/env.js';
 import { DatabaseHealth } from './database-health.service.js';
+import { FixedReadQuery } from './fixed-read-query.service.js';
 import { GuardedQueryService } from './guarded-query.service.js';
+import { QueryExecutor } from './query-executor.service.js';
 import { QueryModule } from './query.module.js';
+import { READONLY_POOL } from './query.tokens.js';
 import { SchemaCatalog } from './schema-catalog.service.js';
 
 const ENV: AppEnv = {
@@ -47,17 +50,28 @@ const ENV: AppEnv = {
     sqlCacheTtlSeconds: 3600,
     resultCacheTtlSeconds: 300,
   },
+  dashboard: { onTimeTargetPercent: 95 },
 };
 
 // The security boundary of the module: the pool and the unguarded executor must
 // never be exported, or another module could run SQL around the guard.
+// FixedReadQuery (D-54) is the one deliberate addition: it runs statements
+// written in the code, with values as parameters, as the same read-only role.
 describe('QueryModule', () => {
-  it('exports only the guarded query service, the health check and the schema description', () => {
+  it('exports only the guarded query service, the health check, the schema description and the fixed statements', () => {
     expect(QueryModule.register(ENV).exports).toEqual([
       GuardedQueryService,
       DatabaseHealth,
       SchemaCatalog,
+      FixedReadQuery,
     ]);
+  });
+
+  it('never exports the pool or the unguarded executor', () => {
+    const exported = QueryModule.register(ENV).exports ?? [];
+
+    expect(exported).not.toContain(READONLY_POOL);
+    expect(exported).not.toContain(QueryExecutor);
   });
 
   it('registers no controller unless the internal endpoint is enabled', () => {

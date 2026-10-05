@@ -54,7 +54,17 @@ describe('loadEnv', () => {
         sqlCacheTtlSeconds: 3600,
         resultCacheTtlSeconds: 300,
       },
+      dashboard: { onTimeTargetPercent: 95 },
     });
+  });
+
+  it('reads the on-time delivery target of the dashboard', () => {
+    expect(loadEnv({ ...REQUIRED_ENV, ON_TIME_DELIVERY_TARGET_PERCENT: '90' }).dashboard).toEqual({
+      onTimeTargetPercent: 90,
+    });
+    expect(() => loadEnv({ ...REQUIRED_ENV, ON_TIME_DELIVERY_TARGET_PERCENT: '0' })).toThrow(
+      InvalidEnvError,
+    );
   });
 
   it('reads the LLM variables', () => {

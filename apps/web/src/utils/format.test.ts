@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   formatAxisNumber,
   formatCell,
+  formatCompactCurrency,
   formatCountdown,
+  formatCurrency,
+  formatDay,
+  formatDecimal,
+  formatShortDay,
+  formatSigned,
   formatDuration,
   formatElapsed,
   formatInteger,
@@ -99,5 +105,33 @@ describe('display helpers of the answer metadata', () => {
     expect(formatInteger(200_000)).toBe('200.000');
     expect(formatTime('not a date')).toBe('');
     expect(formatTime('2026-10-05T14:32:00.000Z')).toMatch(/^\d{2}:\d{2}$/);
+  });
+});
+
+describe('display helpers of the dashboard', () => {
+  it('formats money in full and in the short form', () => {
+    expect(formatCurrency(18_372.4)).toBe('R$ 18.372,40');
+    expect(formatCompactCurrency(43_800_000)).toBe('R$ 43,8 mi');
+    expect(formatCompactCurrency(902_460)).toBe('R$ 902,46 mil');
+  });
+
+  it('writes a change with its sign', () => {
+    expect(formatSigned(1.8)).toBe('+1,8');
+    expect(formatSigned(-1.8)).toBe('−1,8');
+    expect(formatSigned(0)).toBe('0,0');
+    expect(formatSigned(18, 0)).toBe('+18');
+    expect(formatSigned(-536, 0)).toBe('−536');
+  });
+
+  it('shows a calendar day exactly as the server sent it', () => {
+    // No time zone involved: the 1st stays the 1st wherever the browser is.
+    expect(formatDay('2026-09-01')).toBe('01/09/2026');
+    expect(formatShortDay('2026-09-01')).toBe('01/09');
+    expect(formatDay('not a day')).toBe('not a day');
+  });
+
+  it('formats one decimal place', () => {
+    expect(formatDecimal(92.4)).toBe('92,4');
+    expect(formatDecimal(80)).toBe('80,0');
   });
 });
