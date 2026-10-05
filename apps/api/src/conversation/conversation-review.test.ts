@@ -2,12 +2,17 @@ import type { ServerResponse } from 'node:http';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { ScriptedLlmProvider } from '../../test/support/scripted-llm-provider.js';
+import type { UsageService } from '../limits/usage.service.js';
 import type { AnswerStreamEvent } from './sse.js';
 import { ConversationController } from './conversation.controller.js';
 import type { ConversationRepository, PendingReview } from './conversation.repository.js';
 import { ConversationService } from './conversation.service.js';
 
 const CONVERSATION_ID = '11111111-1111-4111-8111-111111111111';
+const USER = { id: '99999999-9999-4999-8999-999999999999', email: 'a@b.c', name: 'A' };
+const ALLOW_ALL = {
+  assertCanUseLlm: vi.fn(() => Promise.resolve()),
+} as unknown as UsageService;
 const PENDING: PendingReview = {
   messageId: '7',
   question: 'Quais regiões?',
@@ -22,7 +27,8 @@ function serviceWith(findPendingReview: () => Promise<PendingReview | undefined>
     streamReview: vi.fn(),
     streamReviewedExecution: vi.fn(),
   };
-  return new ConversationService(repository, askService, new ScriptedLlmProvider([]));
+  const usage = { record: vi.fn(() => Promise.resolve()) };
+  return new ConversationService(repository, askService, new ScriptedLlmProvider([]), usage);
 }
 
 describe('ConversationService.claimPendingReview', () => {
@@ -85,15 +91,16 @@ describe('ConversationController execute stream', () => {
       throw new Error('boom: internal detail');
     }
     const service = {
+      isOwnedBy: vi.fn(() => Promise.resolve(true)),
       claimPendingReview: vi.fn(() => Promise.resolve(PENDING)),
       executeReview: vi.fn(() => failingExecution()),
       releaseReview,
       refreshMemory: vi.fn(() => Promise.resolve(false)),
     } as unknown as ConversationService;
-    const controller = new ConversationController(service);
+    const controller = new ConversationController(service, ALLOW_ALL);
     const { reply, raw, written } = fakeResponse();
 
-    await controller.execute(CONVERSATION_ID, '7', { sql: PENDING.generatedSql }, reply);
+    await controller.execute(USER, CONVERSATION_ID, '7', { sql: PENDING.generatedSql }, reply);
 
     expect(raw.end).toHaveBeenCalledTimes(1);
     expect(written).toEqual([
@@ -106,18 +113,19 @@ describe('ConversationController execute stream', () => {
   it('releases the review even if the response could not be started', async () => {
     const releaseReview = vi.fn();
     const service = {
+      isOwnedBy: vi.fn(() => Promise.resolve(true)),
       claimPendingReview: vi.fn(() => Promise.resolve(PENDING)),
       executeReview: vi.fn(),
       releaseReview,
     } as unknown as ConversationService;
-    const controller = new ConversationController(service);
+    const controller = new ConversationController(service, ALLOW_ALL);
     const { reply } = fakeResponse();
     reply.hijack.mockImplementation(() => {
       throw new Error('cannot hijack');
     });
 
     await expect(
-      controller.execute(CONVERSATION_ID, '7', { sql: PENDING.generatedSql }, reply),
+      controller.execute(USER, CONVERSATION_ID, '7', { sql: PENDING.generatedSql }, reply),
     ).rejects.toThrow('cannot hijack');
     expect(releaseReview).toHaveBeenCalledWith('7');
   });

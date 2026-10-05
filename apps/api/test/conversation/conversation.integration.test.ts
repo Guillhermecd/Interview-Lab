@@ -17,6 +17,7 @@ import {
   sqlAnswer,
   summaryAnswer,
 } from '../support/scripted-llm-provider.js';
+import { registerUser, sendCookieOnEveryRequest } from '../support/session.js';
 import { parseSseBody, type ReceivedEvent } from '../support/sse-client.js';
 import {
   migrateTestDatabase,
@@ -25,7 +26,7 @@ import {
   type TestDatabase,
 } from '../support/test-database.js';
 
-const CONVERSATIONS_URL = '/api/internal/conversations';
+const CONVERSATIONS_URL = '/api/conversations';
 const UNKNOWN_ID = '00000000-0000-4000-8000-000000000000';
 const REGION_COUNT_SQL = 'SELECT count(*) AS regioes FROM regions';
 
@@ -44,11 +45,26 @@ describe('conversations over HTTP', () => {
       .useValue(provider)
       .compile();
     const app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
-    configureApp(app);
+    await configureApp(app);
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
     apps.push(app);
+    await signIn(app);
     return app;
+  }
+
+  // Each app gets its own account; the cookie is also kept for fetch() calls.
+  let accounts = 0;
+  let sessionCookie = '';
+  async function signIn(app: NestFastifyApplication): Promise<void> {
+    accounts += 1;
+    sessionCookie = await registerUser(app, `pessoa${String(accounts)}@example.com`);
+    sendCookieOnEveryRequest(app, sessionCookie);
+  }
+
+  async function currentUserId(app: NestFastifyApplication): Promise<string> {
+    const response = await app.inject({ method: 'GET', url: '/api/auth/me' });
+    return response.json<{ id: string }>().id;
   }
 
   async function createConversation(app: NestFastifyApplication): Promise<Conversation> {
@@ -81,7 +97,7 @@ describe('conversations over HTTP', () => {
   }
 
   beforeAll(async () => {
-    database = await startTestDatabase();
+    database = await startTestDatabase({ redis: true });
     await migrateTestDatabase(database);
     await withClient(database.admin, seedDemoData);
   });
@@ -240,10 +256,11 @@ describe('conversations over HTTP', () => {
         imports: [AppModule.register(database.appEnv({ internalEndpointEnabled: true }))],
       }).compile();
       const app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
-      configureApp(app);
+      await configureApp(app);
       await app.init();
       await app.getHttpAdapter().getInstance().ready();
       apps.push(app);
+      await signIn(app);
       const conversation = await createConversation(app);
 
       const events = await ask(app, conversation.id, 'Quantas regiões?');
@@ -362,6 +379,7 @@ describe('conversations over HTTP', () => {
       );
       const app = await startApp(provider);
       const service = app.get(ConversationService);
+      const userId = await currentUserId(app);
       const conversation = await createConversation(app);
 
       // 5 rounds = 10 messages: below the threshold, no summary call.
@@ -369,7 +387,7 @@ describe('conversations over HTTP', () => {
         await ask(app, conversation.id, `Pergunta ${String(round)}`);
       }
       expect(provider.requests).toHaveLength(rounds - 1);
-      await expect(service.refreshMemory(conversation.id)).resolves.toBe(false);
+      await expect(service.refreshMemory(userId, conversation.id)).resolves.toBe(false);
 
       // The 6th round reaches 12 messages: the controller refreshes the summary
       // right after the answer, covering the 6 oldest messages.
@@ -380,9 +398,18 @@ describe('conversations over HTTP', () => {
       expect(summaryPrompt).toContain('assistant: Resposta 3.');
       expect(summaryPrompt).not.toContain('Pergunta 4');
 
+      // The summary call is billed to the user like any other (Phase 08).
+      const summaryUsage = await withClient(database.admin, (client) =>
+        client.query<{ calls: number }>(
+          "SELECT calls FROM app.token_usage WHERE user_id = $1 AND kind = 'summary'",
+          [userId],
+        ),
+      );
+      expect(summaryUsage.rows).toEqual([{ calls: 1 }]);
+
       // Nothing left to summarize until 6 more messages accumulate.
       await expect
-        .poll(() => service.refreshMemory(conversation.id).catch(() => undefined))
+        .poll(() => service.refreshMemory(userId, conversation.id).catch(() => undefined))
         .toBe(false);
 
       // The next question receives the summary plus the 6 recent messages.
@@ -438,12 +465,20 @@ describe('conversations over HTTP', () => {
       expect(get.statusCode).toBe(404);
     });
 
-    it('does not register the conversation endpoints by default', async () => {
+    it('requires a signed-in user', async () => {
       const app = await startApp(new ScriptedLlmProvider([]), database.appEnv());
 
-      const response = await app.inject({ method: 'POST', url: CONVERSATIONS_URL });
+      const response = await app.inject({
+        method: 'POST',
+        url: CONVERSATIONS_URL,
+        headers: { cookie: 'interview_lab_session=not-a-valid-token' },
+      });
 
-      expect(response.statusCode).toBe(404);
+      expect(response.statusCode).toBe(401);
+      expect(response.json()).toEqual({
+        code: 'UNAUTHORIZED',
+        message: 'Autenticação necessária.',
+      });
     });
   });
 
@@ -496,7 +531,7 @@ describe('conversations over HTTP', () => {
 
       const response = await fetch(`${baseUrl}${CONVERSATIONS_URL}/${conversation.id}/messages`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', cookie: sessionCookie },
         body: JSON.stringify({ question: 'Quantas regiões?' }),
         signal: abort.signal,
       });
@@ -522,7 +557,7 @@ describe('conversations over HTTP', () => {
 
       const request = fetch(`${baseUrl}${CONVERSATIONS_URL}/${conversation.id}/messages`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', cookie: sessionCookie },
         body: JSON.stringify({ question: 'Conta lenta' }),
         signal: abort.signal,
       })

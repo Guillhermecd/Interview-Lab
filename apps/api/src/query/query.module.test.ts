@@ -33,6 +33,20 @@ const ENV: AppEnv = {
     timeoutMs: 5000,
     explainMaxRows: 50,
   },
+  auth: {
+    jwtSecret: 'test-secret-with-at-least-32-characters!',
+    jwtExpiresInSeconds: 3600,
+    secureCookies: false,
+    allowedOrigins: ['http://localhost:5173'],
+  },
+  redis: { url: 'redis://localhost:6379' },
+  limits: {
+    questionsPerMinute: 10,
+    dailyTokenQuota: 200_000,
+    loginAttemptsPerMinute: 5,
+    sqlCacheTtlSeconds: 3600,
+    resultCacheTtlSeconds: 300,
+  },
 };
 
 // The security boundary of the module: the pool and the unguarded executor must

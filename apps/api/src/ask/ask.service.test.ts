@@ -8,6 +8,7 @@ import {
 import { LlmError } from '../llm/llm-error.js';
 import { QueryExecutionError } from '../query/query-error.js';
 import type { SchemaDescription } from '../query/schema-catalog.service.js';
+import { NoAnswerCache, type AnswerCache, type CachedSql } from './answer-cache.js';
 import { AskService, type AskEvent } from './ask.service.js';
 
 const SCHEMA: SchemaDescription = {
@@ -18,6 +19,7 @@ const SCHEMA: SchemaDescription = {
       constraints: [],
     },
   ],
+  version: 'test-schema-v1',
 };
 
 const RESULT: QueryResult = {
@@ -66,13 +68,49 @@ class FakeQueries {
   }
 }
 
-function setup(jsonAnswers: unknown[], texts: (string | Error)[], outcomes: RunOutcome[]) {
+const TABLE_ONLY = { type: 'table', xColumn: '', yColumn: '' };
+
+// In-memory cache of generated SQL; results are never cached here.
+class MemorySqlCache implements AnswerCache {
+  readonly sql = new Map<string, CachedSql>();
+
+  getSql(question: string): Promise<CachedSql | undefined> {
+    return Promise.resolve(this.sql.get(question));
+  }
+  setSql(question: string, _version: string, value: CachedSql): Promise<void> {
+    this.sql.set(question, value);
+    return Promise.resolve();
+  }
+  deleteSql(question: string): Promise<void> {
+    this.sql.delete(question);
+    return Promise.resolve();
+  }
+  getResult(): Promise<undefined> {
+    return Promise.resolve(undefined);
+  }
+  setResult(): Promise<void> {
+    return Promise.resolve();
+  }
+}
+
+function setup(
+  jsonAnswers: unknown[],
+  texts: (string | Error)[],
+  outcomes: RunOutcome[],
+  cache: AnswerCache = new NoAnswerCache(),
+) {
   const provider = new ScriptedLlmProvider(jsonAnswers, texts);
   const queries = new FakeQueries(outcomes);
-  const service = new AskService(provider, { describe: () => Promise.resolve(SCHEMA) }, queries, {
-    maxRows: 1000,
-    explainMaxRows: 50,
-  });
+  const service = new AskService(
+    provider,
+    { describe: () => Promise.resolve(SCHEMA) },
+    queries,
+    {
+      maxRows: 1000,
+      explainMaxRows: 50,
+    },
+    cache,
+  );
   return { provider, queries, service };
 }
 
@@ -430,5 +468,42 @@ describe('AskService review mode', () => {
     ).rejects.toMatchObject({ code: 'QUERY_REJECTED' });
     expect(provider.requests).toHaveLength(0);
     expect(provider.textRequests).toHaveLength(0);
+  });
+
+  describe('cache of generated SQL', () => {
+    it('uses the cached SQL without asking the LLM to generate it', async () => {
+      const cache = new MemorySqlCache();
+      cache.sql.set(QUESTION, { sql: 'SELECT cached', proposedVisualization: TABLE_ONLY });
+      const { service, provider, queries } = setup([], ['Explicação.'], [RESULT], cache);
+
+      await expect(service.ask(QUESTION)).resolves.toMatchObject({
+        status: 'answered',
+        sql: 'SELECT cached',
+      });
+      expect(provider.requests).toHaveLength(0);
+      expect(queries.executed).toEqual(['SELECT cached']);
+    });
+
+    it('sends cached SQL through the guard again, and regenerates it when refused', async () => {
+      const cache = new MemorySqlCache();
+      cache.sql.set(QUESTION, {
+        sql: 'DELETE FROM regions',
+        proposedVisualization: TABLE_ONLY,
+      });
+      const { service, provider, queries } = setup(
+        [sqlAnswer('SELECT fresh')],
+        ['Explicação.'],
+        [rejected('Only SELECT statements are allowed.'), RESULT],
+        cache,
+      );
+
+      await expect(service.ask(QUESTION)).resolves.toMatchObject({
+        status: 'answered',
+        sql: 'SELECT fresh',
+      });
+      expect(queries.executed).toEqual(['DELETE FROM regions', 'SELECT fresh']);
+      expect(provider.requests).toHaveLength(1);
+      expect(cache.sql.get(QUESTION)?.sql).toBe('SELECT fresh');
+    });
   });
 });

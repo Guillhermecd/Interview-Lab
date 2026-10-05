@@ -8,6 +8,7 @@ import { configureApp } from '../../src/app.setup.js';
 import { seedDemoData } from '../../src/database/seed.js';
 import { LLM_PROVIDER } from '../../src/llm/llm-provider.js';
 import { refusalAnswer, ScriptedLlmProvider, sqlAnswer } from '../support/scripted-llm-provider.js';
+import { registerUser, sendCookieOnEveryRequest } from '../support/session.js';
 import { parseSseBody, type ReceivedEvent } from '../support/sse-client.js';
 import {
   migrateTestDatabase,
@@ -16,7 +17,7 @@ import {
   type TestDatabase,
 } from '../support/test-database.js';
 
-const CONVERSATIONS_URL = '/api/internal/conversations';
+const CONVERSATIONS_URL = '/api/conversations';
 const GENERATED_SQL = 'SELECT name AS regiao, id AS codigo FROM regions ORDER BY name';
 
 // Review mode (Phase 07): the LLM is scripted; HTTP, persistence, SQL guard,
@@ -33,12 +34,19 @@ describe('review mode over HTTP', () => {
       .useValue(provider)
       .compile();
     const app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
-    configureApp(app);
+    await configureApp(app);
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
     apps.push(app);
+    accounts += 1;
+    sendCookieOnEveryRequest(
+      app,
+      await registerUser(app, `revisor${String(accounts)}@example.com`),
+    );
     return app;
   }
+
+  let accounts = 0;
 
   async function createConversation(app: NestFastifyApplication): Promise<Conversation> {
     const response = await app.inject({ method: 'POST', url: CONVERSATIONS_URL });
@@ -97,7 +105,7 @@ describe('review mode over HTTP', () => {
   }
 
   beforeAll(async () => {
-    database = await startTestDatabase();
+    database = await startTestDatabase({ redis: true });
     await migrateTestDatabase(database);
     await withClient(database.admin, seedDemoData);
   });

@@ -91,3 +91,5 @@ export class FakeApi {
     return handler(init);
   };
 }
+
+export const TEST_USER = { id: 'u-1', email: 'ana@example.com', name: 'Ana' };

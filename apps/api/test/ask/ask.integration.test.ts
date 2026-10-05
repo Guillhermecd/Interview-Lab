@@ -1,6 +1,7 @@
 import { loadModule } from 'libpg-query';
 import type { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { NoAnswerCache } from '../../src/ask/answer-cache.js';
 import { AskService } from '../../src/ask/ask.service.js';
 import { seedDemoData } from '../../src/database/seed.js';
 import { GuardedQueryService } from '../../src/query/guarded-query.service.js';
@@ -28,10 +29,16 @@ describe('AskService against PostgreSQL', () => {
   let queries: GuardedQueryService;
 
   function serviceWith(provider: ScriptedLlmProvider): AskService {
-    return new AskService(provider, schemaCatalog, queries, {
-      maxRows: MAX_ROWS,
-      explainMaxRows: EXPLAIN_MAX_ROWS,
-    });
+    return new AskService(
+      provider,
+      schemaCatalog,
+      queries,
+      {
+        maxRows: MAX_ROWS,
+        explainMaxRows: EXPLAIN_MAX_ROWS,
+      },
+      new NoAnswerCache(),
+    );
   }
 
   beforeAll(async () => {

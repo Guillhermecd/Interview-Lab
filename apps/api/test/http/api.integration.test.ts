@@ -6,6 +6,7 @@ import { AppModule } from '../../src/app.module.js';
 import { configureApp } from '../../src/app.setup.js';
 import type { AppEnv } from '../../src/config/env.js';
 import { seedDemoData } from '../../src/database/seed.js';
+import { registerUser, sendCookieOnEveryRequest } from '../support/session.js';
 import {
   migrateTestDatabase,
   startTestDatabase,
@@ -20,11 +21,15 @@ async function startApp(env: AppEnv): Promise<NestFastifyApplication> {
     imports: [AppModule.register(env)],
   }).compile();
   const app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
-  configureApp(app);
+  await configureApp(app);
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
+  accounts += 1;
+  sendCookieOnEveryRequest(app, await registerUser(app, `api${String(accounts)}@example.com`));
   return app;
 }
+
+let accounts = 0;
 
 describe('API over HTTP', () => {
   let database: TestDatabase;
