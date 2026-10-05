@@ -3,6 +3,8 @@ import type { QueryResult } from '@interview-lab/shared';
 const NEEDS_QUOTES = /[",;\r\n]/;
 // A leading =, +, - or @ makes spreadsheet programs run the cell as a formula.
 const FORMULA_START = /^[=+\-@\t\r]/;
+// PostgreSQL sends numeric and bigint values as text: "-19.0" is a number.
+const PLAIN_NUMBER = /^[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/;
 
 function csvCell(value: unknown): string {
   if (value === null || value === undefined) {
@@ -15,7 +17,8 @@ function csvCell(value: unknown): string {
         ? String(value)
         : JSON.stringify(value);
   // Text coming from the database is data, never a formula.
-  const text = typeof value === 'string' && FORMULA_START.test(raw) ? `'${raw}` : raw;
+  const isFormula = typeof value === 'string' && FORMULA_START.test(raw) && !PLAIN_NUMBER.test(raw);
+  const text = isFormula ? `'${raw}` : raw;
   return NEEDS_QUOTES.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 

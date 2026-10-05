@@ -11,6 +11,7 @@ import { ConversationSidebar } from './ConversationSidebar';
 import { QuestionForm } from './QuestionForm';
 import { useChat } from './useChat';
 import { useConversationList } from './useConversationList';
+import { useQuotaBlock } from './useQuotaBlock';
 import { useUsage } from './useUsage';
 
 const EXAMPLE_QUESTIONS = [
@@ -19,20 +20,9 @@ const EXAMPLE_QUESTIONS = [
   'Como evoluiu o número de pedidos por mês?',
 ];
 
-const QUOTA_CODE = 'QUOTA_EXCEEDED';
-
 interface ChatPageProps {
   user: AuthUser;
   onLogout: () => void;
-}
-
-// The server refused the last question because the daily quota ran out: asking
-// again gets the same answer, so the composer says why instead.
-function quotaMessage(items: ChatItem[]): string | undefined {
-  const last = items.at(-1);
-  return last?.kind === 'answer' && last.error?.code === QUOTA_CODE
-    ? last.error.message
-    : undefined;
 }
 
 // The question an answer replies to: the item right before it.
@@ -54,6 +44,7 @@ export function ChatPage({ user, onLogout }: ChatPageProps) {
     setSelectedId(conversationId);
   }, []);
   const chat = useChat(selectedId, handleCreated);
+  const quotaBlock = useQuotaBlock(chat.items);
   const endRef = useRef<HTMLDivElement>(null);
 
   // The list shows titles and order coming from the server: refresh it once an
@@ -170,7 +161,7 @@ export function ChatPage({ user, onLogout }: ChatPageProps) {
         <QuestionForm
           isAnswering={chat.isAnswering}
           review={review}
-          blockedReason={quotaMessage(chat.items)}
+          blockedReason={quotaBlock}
           onReviewChange={setReview}
           onAsk={ask}
           onCancel={chat.cancel}

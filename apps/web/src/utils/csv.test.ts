@@ -45,7 +45,16 @@ describe('toCsv', () => {
     expect(csv).toBe(`nome\r\n"'=HYPERLINK(""http://x"")"\r\n'+55 11\r\n'@user`);
   });
 
-  it('does not touch numbers that start with a minus sign', () => {
-    expect(toCsv(resultOf(['variacao'], [[-19.5]]))).toBe('variacao\r\n-19.5');
+  it('does not touch numbers that start with a sign', () => {
+    // numeric and bigint columns arrive as text from the API.
+    const csv = toCsv(resultOf(['variacao'], [['-19.0'], ['+1.5'], ['-3'], [-19.5], ['-1e3']]));
+
+    expect(csv).toBe('variacao\r\n-19.0\r\n+1.5\r\n-3\r\n-19.5\r\n-1e3');
+  });
+
+  it('still neutralises a formula that starts with a number sign', () => {
+    const csv = toCsv(resultOf(['nome'], [['-1+cmd|x'], ['-19.0%']]));
+
+    expect(csv).toBe("nome\r\n'-1+cmd|x\r\n'-19.0%");
   });
 });
