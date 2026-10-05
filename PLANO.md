@@ -20,9 +20,13 @@ tabela/gráfico + explicação, em streaming.
 | 06 | Frontend: chat, tabela, gráfico, editor SQL | D-06 | CONCLUÍDA |
 | 07 | Human-in-the-loop (revisar/editar SQL) | — | CONCLUÍDA |
 | 08 | Autenticação, tokens por usuário, rate limit, cache | D-07b, D-08 | CONCLUÍDA |
-| 09 | Observabilidade, hardening, deploy e README | D-11 | PENDENTE |
+| 09a | Design: tokens, tema, componentes e chat reestilizado | D-38, D-39, D-41, D-44, D-45, D-46, D-47 | EM ANDAMENTO |
+| 09b | Design: tela do chat em três colunas e painel de schema | D-41, D-43, D-48 | PENDENTE |
+| 09c | Design: dashboard operacional | D-40 | PENDENTE |
+| 09d | Design: chat suspenso no dashboard | D-42 | PENDENTE |
+| 10 | Observabilidade, hardening, deploy e README | D-11 | PENDENTE |
 
-A ordem acima é uma proposta (ver D-10).
+A ordem acima é uma proposta (ver D-10). A Fase 09 entrou em 2026-10-05 (D-38).
 
 ---
 
@@ -119,7 +123,49 @@ desconexão); teste da regra de resumo.
 **Verificação:** testes de rate limit (limite atingido → 429), de cota, de acerto/erro de cache
 e de invalidação quando o schema muda.
 
-## Fase 09 — Observabilidade, hardening, deploy e README
+## Fase 09 — Design (handoff "Converse com seus dados")
+**Objetivo:** aplicar o design do handoff (`design_handoff_converse_dados/README.md`) sobre o
+fluxo real que já existe, sem simular a API (D-39). Quatro PRs, cada um com branch e relatório.
+
+### Fase 09a — Tokens, tema, componentes e chat reestilizado
+**Entregas**
+- Tokens de cor claro/escuro, tipografia (Instrument Sans e JetBrains Mono, D-44), raios e sombra do handoff.
+- Ícones em SVG inline (D-45).
+- Componentes `SqlBlock`, `Alert`, `AiMessage` e `KpiCard` com as props do handoff.
+- Chat atual usando os componentes novos, com os estados: gerando, revisão, executando,
+  streaming, concluído, bloqueado, timeout, resultado vazio, rate limit e cota.
+- Contrato: `cached` no evento `done` e `retryAfterSeconds` no erro `RATE_LIMITED` (D-41).
+
+**Verificação:** testes das transições de estado do `AiMessage`, do `SqlBlock` marcando
+"editado" ao salvar e do botão Executar desabilitado quando bloqueado; testes existentes
+atualizados; E2E do fluxo principal.
+
+### Fase 09b — Tela do chat em três colunas e painel de schema
+**Entregas**
+- Roteador (D-43) com `/chat`; barra superior com tema, usuário e sair (D-48).
+- Lista de conversas (264px) com busca, grupos por data e badge de estado; conversa (máx. 900px);
+  painel de schema (300px, recolhível, fechado abaixo de 1200px).
+- Medidor "Tokens hoje" no cabeçalho; conversa vazia com 6 sugestões.
+- Contrato: `GET /api/schema` e status da última resposta na lista de conversas (D-41).
+
+**Verificação:** testes de componentes e de integração das rotas novas; E2E.
+
+### Fase 09c — Dashboard operacional
+**Entregas**
+- Schema `sales` ampliado e seed (D-40); tabelas novas na allowlist da guarda SQL.
+- Endpoints de agregação para KPIs, gráficos e tabelas; nenhum cálculo de negócio no frontend.
+- Página `/dashboard`: filtros fixos, 6 KPIs, 5 gráficos, 2 tabelas, grid responsivo (1440 e 834).
+
+**Verificação:** testes de integração dos endpoints; guarda SQL com as tabelas novas; testes de componentes.
+
+### Fase 09d — Chat suspenso no dashboard
+**Entregas**
+- Botão flutuante e janela suspensa (420 × 680), com tela cheia, minimizar e fechar.
+- "Perguntar sobre isto" abre a janela com o chip de contexto e a pergunta preenchida (D-42).
+
+**Verificação:** testes de componentes e E2E do fluxo dashboard → pergunta → resposta.
+
+## Fase 10 — Observabilidade, hardening, deploy e README
 **Objetivo:** projeto apresentável e operável.
 **Entregas**
 - Logs estruturados (sem SQL com dados sensíveis, sem tokens de API); métricas básicas.
