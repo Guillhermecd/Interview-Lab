@@ -233,7 +233,8 @@ describe('SqlGuard: tables', () => {
   it('lists the available tables in the rejection', () => {
     expect(rejection('SELECT * FROM invoices').message).toBe(
       'A tabela "invoices" não está disponível para consulta. ' +
-        'Tabelas disponíveis: regions, products, customers, orders, order_items.',
+        'Tabelas disponíveis: regions, products, customers, orders, order_items, ' +
+        'distribution_centers, stock_levels, stock_movements.',
     );
   });
 

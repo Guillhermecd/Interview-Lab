@@ -11,6 +11,9 @@ export const EXPOSED_TABLES: ReadonlySet<string> = new Set([
   'customers',
   'orders',
   'order_items',
+  'distribution_centers',
+  'stock_levels',
+  'stock_movements',
 ]);
 
 // Functions and types may only be unqualified or qualified with this schema.

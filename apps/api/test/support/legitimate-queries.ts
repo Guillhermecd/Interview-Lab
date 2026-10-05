@@ -54,7 +54,7 @@ export const LEGITIMATE_QUERIES: [description: string, sql: string][] = [
   ],
   [
     'average ticket with CASE and IN',
-    `SELECT CASE WHEN p.category IN ('Eletrônicos', 'Móveis') THEN 'duráveis' ELSE 'consumo' END AS grupo,
+    `SELECT CASE WHEN p.category IN ('Aço e metais', 'Tubos e conexões') THEN 'estrutura' ELSE 'acabamento' END AS grupo,
             avg(i.quantity * i.unit_price) AS ticket_medio
      FROM order_items i JOIN products p ON p.id = i.product_id
      GROUP BY 1 HAVING count(*) > 10`,
@@ -62,7 +62,7 @@ export const LEGITIMATE_QUERIES: [description: string, sql: string][] = [
   [
     'search with ILIKE and BETWEEN',
     `SELECT name, price FROM products
-     WHERE name ILIKE '%livro%' AND price BETWEEN 10 AND 200 ORDER BY price DESC LIMIT 20`,
+     WHERE name ILIKE '%cimento%' AND price BETWEEN 10 AND 200 ORDER BY price DESC LIMIT 20`,
   ],
   [
     'distinct with EXISTS',
@@ -91,5 +91,61 @@ export const LEGITIMATE_QUERIES: [description: string, sql: string][] = [
   [
     'an array comparison',
     "SELECT id FROM orders WHERE status = ANY (ARRAY['paid', 'shipped']) LIMIT 5",
+  ],
+  [
+    'revenue by the region of the distribution center, per category',
+    `SELECT r.name AS regiao, p.category, sum(i.quantity * i.unit_price) AS faturamento
+     FROM order_items i
+     JOIN orders o ON o.id = i.order_id
+     JOIN distribution_centers dc ON dc.id = o.distribution_center_id
+     JOIN regions r ON r.id = dc.region_id
+     JOIN products p ON p.id = i.product_id
+     WHERE o.status <> 'cancelled'
+     GROUP BY r.name, p.category`,
+  ],
+  [
+    'products below the minimum stock, with days of coverage',
+    `WITH consumo AS (
+       SELECT product_id, distribution_center_id, sum(quantity) / 30.0 AS saida_media_dia
+       FROM stock_movements
+       WHERE type = 'outbound' AND moved_at >= now() - interval '30 days'
+       GROUP BY 1, 2
+     )
+     SELECT p.name AS material, dc.name AS centro, s.quantity, s.minimum_quantity,
+            floor(s.quantity / nullif(c.saida_media_dia, 0)) AS cobertura_dias
+     FROM stock_levels s
+     JOIN products p ON p.id = s.product_id
+     JOIN distribution_centers dc ON dc.id = s.distribution_center_id
+     LEFT JOIN consumo c
+       ON c.product_id = s.product_id AND c.distribution_center_id = s.distribution_center_id
+     WHERE s.quantity < s.minimum_quantity
+     ORDER BY cobertura_dias NULLS LAST`,
+  ],
+  [
+    'stock value by distribution center',
+    `SELECT dc.name, round(sum(s.quantity * p.cost), 2) AS valor_estoque
+     FROM stock_levels s
+     JOIN products p ON p.id = s.product_id
+     JOIN distribution_centers dc ON dc.id = s.distribution_center_id
+     WHERE p.active
+     GROUP BY dc.name ORDER BY valor_estoque DESC`,
+  ],
+  [
+    'deliveries on time by distribution center',
+    `SELECT dc.name,
+            round(100.0 * count(*) FILTER (WHERE o.delivered_at <= o.expected_delivery_at) / count(*), 1)
+              AS no_prazo_pct
+     FROM orders o JOIN distribution_centers dc ON dc.id = o.distribution_center_id
+     WHERE o.delivered_at IS NOT NULL
+     GROUP BY dc.name`,
+  ],
+  [
+    'transfers between distribution centers',
+    `SELECT origem.name AS origem, destino.name AS destino, sum(m.quantity) AS quantidade
+     FROM stock_movements m
+     JOIN distribution_centers origem ON origem.id = m.distribution_center_id
+     JOIN distribution_centers destino ON destino.id = m.destination_center_id
+     WHERE m.type = 'transfer'
+     GROUP BY 1, 2`,
   ],
 ];
