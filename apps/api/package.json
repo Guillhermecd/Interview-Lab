@@ -15,6 +15,7 @@
     "db:provision": "pnpm build && node --env-file-if-exists=../../.env dist/database/cli.js provision",
     "db:seed": "pnpm build && node --env-file-if-exists=../../.env dist/database/cli.js seed",
     "db:setup": "pnpm build && node --env-file-if-exists=../../.env dist/database/cli.js setup",
+    "db:promote-admin": "pnpm build && node --env-file-if-exists=../../.env dist/database/cli.js promote-admin",
     "eval:llm": "pnpm build && node --env-file-if-exists=../../.env dist/ask/evaluation-cli.js"
   },
   "dependencies": {

@@ -29,6 +29,7 @@ const DEFAULT_ON_TIME_TARGET_PERCENT = 95;
 const MAX_PERCENT = 100;
 
 const MAX_POOL_SIZE = 100;
+const CATALOG_POOL_MAX = 3;
 const MAX_QUERY_ROWS = 10_000;
 const MIN_TIMEOUT_MS = 100;
 const MAX_TIMEOUT_MS = 60_000;
@@ -72,6 +73,13 @@ export interface AppDatabaseEnv extends DatabaseConnectionEnv {
   poolMax: number;
 }
 
+// Credentials of app_catalog_rw, the only role that writes to `sales`: products
+// and stock movements, through the registry (D-56).
+export interface CatalogDatabaseEnv extends DatabaseConnectionEnv {
+  catalogPassword: string;
+  poolMax: number;
+}
+
 export interface DashboardEnv {
   // Share of deliveries expected on time, shown as the target (D-55).
   onTimeTargetPercent: number;
@@ -81,6 +89,7 @@ export interface AppEnv {
   port: number;
   database: ReadonlyDatabaseEnv;
   appDatabase: AppDatabaseEnv;
+  catalogDatabase: CatalogDatabaseEnv;
   query: QueryEnv;
   llm: LlmEnv;
   auth: AuthEnv;
@@ -176,6 +185,12 @@ export function loadEnv(source: NodeJS.ProcessEnv): AppEnv {
       ...connection,
       appPassword: requireValue(source, 'DB_APP_PASSWORD'),
       poolMax,
+    },
+    catalogDatabase: {
+      ...connection,
+      catalogPassword: requireValue(source, 'DB_CATALOG_PASSWORD'),
+      // Few people register products at the same time.
+      poolMax: Math.min(poolMax, CATALOG_POOL_MAX),
     },
     query: loadQueryEnv(source),
     llm: loadLlmEnv(source),

@@ -5,6 +5,7 @@ import type { LimitsEnv } from '../config/security-env.js';
 import { LIMITS_ENV } from '../limits/usage.service.js';
 import { describeErrorForLog } from '../query/query-error.js';
 import { REDIS, type RedisClient } from '../redis/redis.module.js';
+import { SalesDataVersion } from '../redis/sales-data-version.js';
 import type { ProposedVisualization } from './llm-output.js';
 
 export const ANSWER_CACHE = Symbol('ANSWER_CACHE');
@@ -58,6 +59,14 @@ export class NoAnswerCache implements AnswerCache {
   }
 }
 
+// A key, or how to build one when building it needs Redis: the lookup then
+// happens inside the same try as the read or write, and fails the same way.
+type Key = string | (() => Promise<string>);
+
+function resolveKey(key: Key): Promise<string> {
+  return typeof key === 'string' ? Promise.resolve(key) : key();
+}
+
 // Best effort: if Redis fails, the answer is produced without the cache and the
 // failure is only logged. A TTL of 0 disables that part of the cache.
 @Injectable()
@@ -67,6 +76,7 @@ export class RedisAnswerCache implements AnswerCache {
   constructor(
     @Inject(REDIS) private readonly redis: RedisClient,
     @Inject(LIMITS_ENV) private readonly limits: LimitsEnv,
+    @Inject(SalesDataVersion) private readonly dataVersion: Pick<SalesDataVersion, 'current'>,
   ) {}
 
   getSql(question: string, schemaVersion: string): Promise<CachedSql | undefined> {
@@ -90,14 +100,14 @@ export class RedisAnswerCache implements AnswerCache {
 
   getResult(sql: string, schemaVersion: string): Promise<QueryResult | undefined> {
     return this.read<QueryResult>(
-      this.resultKey(sql, schemaVersion),
+      () => this.resultKey(sql, schemaVersion),
       this.limits.resultCacheTtlSeconds,
     );
   }
 
   setResult(sql: string, schemaVersion: string, result: QueryResult): Promise<void> {
     return this.write(
-      this.resultKey(sql, schemaVersion),
+      () => this.resultKey(sql, schemaVersion),
       result,
       this.limits.resultCacheTtlSeconds,
     );
@@ -107,16 +117,19 @@ export class RedisAnswerCache implements AnswerCache {
     return `cache:sql:${schemaVersion}:${digest(normalizeQuestion(question))}`;
   }
 
-  private resultKey(sql: string, schemaVersion: string): string {
-    return `cache:result:${schemaVersion}:${digest(sql.trim())}`;
+  // Results also carry the version of the data: a write through the registry
+  // changes it, and what was cached before is not served again (D-56).
+  private async resultKey(sql: string, schemaVersion: string): Promise<string> {
+    const dataVersion = await this.dataVersion.current();
+    return `cache:result:${schemaVersion}:${dataVersion}:${digest(sql.trim())}`;
   }
 
-  private async read<T>(key: string, ttlSeconds: number): Promise<T | undefined> {
+  private async read<T>(key: Key, ttlSeconds: number): Promise<T | undefined> {
     if (ttlSeconds === 0) {
       return undefined;
     }
     try {
-      const stored = await this.redis.get(key);
+      const stored = await this.redis.get(await resolveKey(key));
       return stored === null ? undefined : (JSON.parse(stored) as T);
     } catch (error) {
       this.logger.warn(`Cache read failed (${describeErrorForLog(error)})`);
@@ -124,12 +137,12 @@ export class RedisAnswerCache implements AnswerCache {
     }
   }
 
-  private async write(key: string, value: unknown, ttlSeconds: number): Promise<void> {
+  private async write(key: Key, value: unknown, ttlSeconds: number): Promise<void> {
     if (ttlSeconds === 0) {
       return;
     }
     try {
-      await this.redis.set(key, JSON.stringify(value), 'EX', ttlSeconds);
+      await this.redis.set(await resolveKey(key), JSON.stringify(value), 'EX', ttlSeconds);
     } catch (error) {
       this.logger.warn(`Cache write failed (${describeErrorForLog(error)})`);
     }

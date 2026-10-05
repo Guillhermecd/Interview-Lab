@@ -55,7 +55,12 @@ export class AuthService {
     if (user === undefined || !valid) {
       throw new AuthError('INVALID_CREDENTIALS');
     }
-    return { id: user.id, email: user.email, name: user.name };
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      canManageCatalog: user.canManageCatalog,
+    };
   }
 
   findUser(userId: string): Promise<AuthUser | undefined> {
