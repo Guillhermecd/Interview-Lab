@@ -149,6 +149,14 @@ export class SqlGuard {
     return { sql: this.rewriteLimit(text, limit), limitRewritten: true };
   }
 
+  // The exposed tables a query reads, in the order they first appear. The
+  // query goes through the same validation as validate(): an invalid one throws.
+  tablesOf(sql: string): string[] {
+    const validator = new AstValidator(this.limits.maxJoins);
+    validator.validateSelect(parseSingleSelect(sql).select);
+    return [...validator.tables];
+  }
+
   private parseAndValidate(sql: string): ParsedSelect {
     const parsed = parseSingleSelect(sql);
     new AstValidator(this.limits.maxJoins).validateSelect(parsed.select);

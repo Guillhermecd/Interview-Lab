@@ -130,7 +130,14 @@ describe('review mode over HTTP', () => {
 
       expect(events).toEqual([
         { event: 'sql', data: { sql: GENERATED_SQL, attempt: 1 } },
-        { event: 'review', data: { messageId: expect.any(String) as string, sql: GENERATED_SQL } },
+        {
+          event: 'review',
+          data: {
+            messageId: expect.any(String) as string,
+            sql: GENERATED_SQL,
+            tables: ['regions'],
+          },
+        },
       ]);
       expect(provider.textRequests).toHaveLength(0);
       const messages = await messagesOf(app, conversation.id);

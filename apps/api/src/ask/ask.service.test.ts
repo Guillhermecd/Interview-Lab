@@ -45,6 +45,8 @@ const QUESTION = 'Quantos pedidos por região?';
 
 type RunOutcome = QueryResult | Error;
 
+const FAKE_TABLES = ['regions', 'orders'];
+
 // Answers each run() or check() with the next outcome and records what it
 // received. check() only uses the outcome to decide whether to throw.
 class FakeQueries {
@@ -62,6 +64,11 @@ class FakeQueries {
       return Promise.reject(new Error('FakeQueries has no outcome left'));
     }
     return outcome instanceof Error ? Promise.reject(outcome) : Promise.resolve(outcome);
+  }
+
+  // The real guard reads them from the SQL; here they only have to be passed on.
+  tablesOf(): string[] {
+    return [...FAKE_TABLES];
   }
 
   check(sql: string): void {
@@ -149,6 +156,7 @@ describe('AskService', () => {
       explanation: 'O Sul tem mais pedidos.',
       visualization: { type: 'bar', xColumn: 'regiao', yColumn: 'pedidos' },
       attempts: 1,
+      tables: FAKE_TABLES,
       cached: false,
       usage: { inputTokens: 200, outputTokens: 40, calls: 2 },
     });
@@ -392,6 +400,7 @@ describe('AskService review mode', () => {
       sql: 'SELECT regiao, pedidos FROM x',
       proposedVisualization: { type: 'bar', xColumn: 'regiao', yColumn: 'pedidos' },
       attempts: 1,
+      tables: FAKE_TABLES,
       usage: { inputTokens: 100, outputTokens: 20, calls: 1 },
     });
     expect(queries.checked).toEqual(['SELECT regiao, pedidos FROM x']);

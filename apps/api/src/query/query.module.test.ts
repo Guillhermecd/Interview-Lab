@@ -6,7 +6,9 @@ import { GuardedQueryService } from './guarded-query.service.js';
 import { QueryExecutor } from './query-executor.service.js';
 import { QueryModule } from './query.module.js';
 import { READONLY_POOL } from './query.tokens.js';
+import { QueryController } from './query.controller.js';
 import { SchemaCatalog } from './schema-catalog.service.js';
+import { SchemaController } from './schema.controller.js';
 
 const ENV: AppEnv = {
   port: 3000,
@@ -81,13 +83,13 @@ describe('QueryModule', () => {
     expect(exported).not.toContain(QueryExecutor);
   });
 
-  it('registers no controller unless the internal endpoint is enabled', () => {
-    expect(QueryModule.register(ENV).controllers).toEqual([]);
+  it('registers only the schema description unless the internal endpoint is enabled', () => {
+    expect(QueryModule.register(ENV).controllers).toEqual([SchemaController]);
   });
 
   it('registers the internal controller when the endpoint is enabled', () => {
     const enabled = { ...ENV, query: { ...ENV.query, internalEndpointEnabled: true } };
 
-    expect(QueryModule.register(enabled).controllers).toHaveLength(1);
+    expect(QueryModule.register(enabled).controllers).toEqual([SchemaController, QueryController]);
   });
 });

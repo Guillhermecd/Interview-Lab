@@ -12,6 +12,7 @@ import { buildSummaryRequest } from '../ask/prompts.js';
 import { toErrorResponse } from '../http/error-response.js';
 import { UsageService } from '../limits/usage.service.js';
 import { LLM_PROVIDER, type LlmProvider } from '../llm/llm-provider.js';
+import { GuardedQueryService } from '../query/guarded-query.service.js';
 import { describeErrorForLog } from '../query/query-error.js';
 import { selectMessagesToSummarize, toConversationContext } from './conversation-memory.js';
 import {
@@ -51,7 +52,7 @@ function toAssistantMessage(answer: Answer): AssistantMessageInput {
 
 function lastEvent(answer: Answer, messageId: string): AnswerStreamEvent {
   if (answer.status === 'pending_review') {
-    return { event: 'review', data: { messageId, sql: answer.sql } };
+    return { event: 'review', data: { messageId, sql: answer.sql, tables: answer.tables } };
   }
   return {
     event: 'done',
@@ -60,7 +61,7 @@ function lastEvent(answer: Answer, messageId: string): AnswerStreamEvent {
       status: answer.status,
       attempts: answer.status === 'answered' ? answer.attempts : 0,
       usage: answer.usage,
-      ...(answer.status === 'answered' && { cached: answer.cached }),
+      ...(answer.status === 'answered' && { cached: answer.cached, tables: answer.tables }),
     },
   };
 }
@@ -105,6 +106,7 @@ export class ConversationService {
     >,
     @Inject(LLM_PROVIDER) private readonly provider: LlmProvider,
     @Inject(UsageService) private readonly usage: Pick<UsageService, 'record'>,
+    @Inject(GuardedQueryService) private readonly queries: Pick<GuardedQueryService, 'tablesOf'>,
   ) {}
 
   create(ownerId: string): Promise<Conversation> {
@@ -119,8 +121,15 @@ export class ConversationService {
     return this.repository.isOwnedBy(conversationId, ownerId);
   }
 
-  listMessages(conversationId: string): Promise<ConversationMessage[]> {
-    return this.repository.listMessages(conversationId);
+  // Each answer with SQL also says which tables it read, found again from the
+  // stored SQL: the schema panel points them out.
+  async listMessages(conversationId: string): Promise<ConversationMessage[]> {
+    const messages = await this.repository.listMessages(conversationId);
+    return messages.map((message) =>
+      message.sql === undefined
+        ? message
+        : { ...message, tables: this.queries.tablesOf(message.sql) },
+    );
   }
 
   // Answers a question inside a conversation. In review mode the stream stops
@@ -162,7 +171,7 @@ export class ConversationService {
         return;
       }
       const { body } = toErrorResponse(error, this.logger);
-      await this.saveFailure(conversationId, body.message);
+      await this.saveFailure(conversationId, body.message, body.code);
       yield { event: 'error', data: body };
     }
   }
@@ -232,6 +241,7 @@ export class ConversationService {
           attempts: answer.attempts,
           usage: answer.usage,
           edited,
+          tables: answer.tables,
         },
       };
     } catch (error) {
@@ -263,11 +273,16 @@ export class ConversationService {
     return true;
   }
 
-  private async saveFailure(conversationId: string, message: string): Promise<void> {
+  private async saveFailure(
+    conversationId: string,
+    message: string,
+    errorCode: string,
+  ): Promise<void> {
     try {
       await this.repository.addAssistantMessage(conversationId, {
         content: message,
         status: 'error',
+        errorCode,
       });
     } catch (error) {
       // The client still gets the original error; only the history misses it.

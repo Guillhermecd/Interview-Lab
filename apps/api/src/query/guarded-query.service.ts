@@ -28,6 +28,16 @@ export class GuardedQueryService {
     this.validate(sql);
   }
 
+  // The tables a query reads, to show the user what an answer was based on.
+  // Only informative: a query the guard refuses simply has none to show.
+  tablesOf(sql: string): string[] {
+    try {
+      return this.guard.tablesOf(sql);
+    } catch {
+      return [];
+    }
+  }
+
   private validate(sql: string): string {
     try {
       return this.guard.validate(sql).sql;

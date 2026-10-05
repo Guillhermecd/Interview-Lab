@@ -70,6 +70,8 @@ export interface AnsweredQuestion {
   visualization: VisualizationSuggestion;
   // How many times SQL was generated: 2 when the first attempt was refused.
   attempts: number;
+  // Tables the SQL reads, as found by the SQL guard in its syntax tree.
+  tables: string[];
   // True when the SQL was reused from the cache instead of generated now.
   cached: boolean;
   usage: TokenUsage;
@@ -85,12 +87,20 @@ export interface UnansweredQuestion {
 
 export type AskResponse = AnsweredQuestion | UnansweredQuestion;
 
+// Why the last answer of a conversation needs the user's attention, decided
+// by the server: it waits for review, was blocked by the SQL guard, or ran out
+// of time.
+export const CONVERSATION_ATTENTIONS = ['pending_review', 'blocked', 'timeout'] as const;
+export type ConversationAttention = (typeof CONVERSATION_ATTENTIONS)[number];
+
 export interface Conversation {
   id: string;
   // First question of the conversation; null until one is asked.
   title: string | null;
   createdAt: string;
   updatedAt: string;
+  // Present only when the last answer needs attention.
+  attention?: ConversationAttention;
 }
 
 export type MessageRole = 'user' | 'assistant';
@@ -111,6 +121,8 @@ export interface ConversationMessage {
   // the LLM is then in `generatedSql` (audit, D-33).
   edited?: boolean;
   generatedSql?: string;
+  // Tables the SQL reads; present on assistant messages that have SQL.
+  tables?: string[];
   createdAt: string;
 }
 
@@ -154,6 +166,8 @@ export interface RowsStreamEvent {
 export interface ReviewStreamEvent {
   messageId: string;
   sql: string;
+  // Tables the SQL reads.
+  tables: string[];
 }
 
 export interface TokenStreamEvent {
@@ -169,6 +183,8 @@ export interface DoneStreamEvent {
   edited?: boolean;
   // Present on an answered question: the SQL came from the cache.
   cached?: boolean;
+  // Present on an answered question: tables the executed SQL reads.
+  tables?: string[];
 }
 
 export interface AnswerStreamEvents {
@@ -203,8 +219,13 @@ export interface LoginRequest {
 }
 
 // Tokens spent today (UTC) by the signed-in user, and the limits that apply.
+// How close today's usage is to the daily quota, decided by the server.
+export const USAGE_LEVELS = ['normal', 'attention', 'critical'] as const;
+export type UsageLevel = (typeof USAGE_LEVELS)[number];
+
 export interface UsageSummary {
   today: TokenUsage;
+  level: UsageLevel;
   dailyTokenQuota: number;
   questionsPerMinute: number;
   byConversation: { conversationId: string; title: string | null; tokens: number }[];
@@ -486,3 +507,25 @@ export interface RecordedStockMovement {
 }
 
 export type StockMovementPage = Page<StockMovement>;
+
+// ---------------------------------------------------------------------------
+// The tables the AI can read, for the schema panel of the chat (Phase 09b).
+
+export interface SchemaColumn {
+  name: string;
+  // As PostgreSQL prints it: "bigint", "numeric(12,2)", "timestamp with time zone".
+  type: string;
+  nullable: boolean;
+  primaryKey: boolean;
+  // Present when the column points to another exposed table.
+  references?: { table: string; column: string };
+}
+
+export interface SchemaTable {
+  name: string;
+  columns: SchemaColumn[];
+}
+
+export interface SchemaOverview {
+  tables: SchemaTable[];
+}

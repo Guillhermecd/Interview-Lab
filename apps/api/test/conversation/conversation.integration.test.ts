@@ -156,6 +156,8 @@ describe('conversations over HTTP', () => {
         attempts: 1,
         usage: { inputTokens: 200, outputTokens: 40, calls: 2 },
         cached: false,
+        // Read by the SQL guard from the syntax tree of the query.
+        tables: ['regions'],
       });
     });
 
@@ -303,6 +305,7 @@ describe('conversations over HTTP', () => {
           sql: 'SELECT name AS regiao FROM regions ORDER BY name',
           visualization: { type: 'table' },
           rowCount: 5,
+          tables: ['regions'],
           createdAt: expect.any(String) as string,
         },
       ]);
