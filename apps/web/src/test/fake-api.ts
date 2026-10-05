@@ -81,7 +81,8 @@ export class FakeApi {
     const body: unknown = typeof init.body === 'string' ? JSON.parse(init.body) : undefined;
     this.calls.push({ key, body });
 
-    const handler = this.handlers.get(key);
+    // A handler registered without a query string answers any query of that path.
+    const handler = this.handlers.get(key) ?? this.handlers.get(key.split('?')[0] ?? key);
     if (!handler) {
       return jsonResponse({ code: 'NOT_FOUND', message: 'Recurso não encontrado.' }, 404);
     }

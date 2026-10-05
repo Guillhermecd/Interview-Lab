@@ -2,7 +2,7 @@ import type { Conversation, QueryResult } from '@interview-lab/shared';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FakeApi, jsonResponse, sseResponse, TEST_USER } from '../../test/fake-api';
+import { FakeApi, jsonResponse, sseResponse } from '../../test/fake-api';
 import { replaceSqlEditorText } from '../../test/sql-editor';
 import { ChatPage } from './ChatPage';
 
@@ -42,7 +42,7 @@ afterEach(() => {
 
 async function openConversationAndAsk(question: string, review: boolean) {
   const user = userEvent.setup();
-  render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
+  render(<ChatPage />);
   await user.click(await screen.findByRole('button', { name: CONVERSATION.title ?? '' }));
   const toggle = screen.getByRole('switch', { name: 'Revisar SQL antes de executar' });
   if ((toggle.getAttribute('aria-checked') === 'true') !== review) {
@@ -56,13 +56,13 @@ async function openConversationAndAsk(question: string, review: boolean) {
 describe('review mode', () => {
   it('is off by default and remembers the choice', async () => {
     const user = userEvent.setup();
-    const { unmount } = render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
+    const { unmount } = render(<ChatPage />);
     const toggle = screen.getByRole('switch', { name: 'Revisar SQL antes de executar' });
     expect(toggle).not.toBeChecked();
 
     await user.click(toggle);
     unmount();
-    render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
+    render(<ChatPage />);
 
     expect(screen.getByRole('switch', { name: 'Revisar SQL antes de executar' })).toBeChecked();
   });
@@ -282,7 +282,7 @@ describe('review mode', () => {
       }),
     );
     const user = userEvent.setup();
-    render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
+    render(<ChatPage />);
 
     await user.click(await screen.findByRole('button', { name: CONVERSATION.title ?? '' }));
 
@@ -312,7 +312,7 @@ describe('review mode', () => {
       }),
     );
     const user = userEvent.setup();
-    render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
+    render(<ChatPage />);
 
     await user.click(await screen.findByRole('button', { name: CONVERSATION.title ?? '' }));
 
@@ -341,7 +341,7 @@ describe('leaving while a new conversation is being created', () => {
           }),
       );
     const user = userEvent.setup();
-    render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
+    render(<ChatPage />);
     await screen.findByRole('button', { name: CONVERSATION.title ?? '' });
     await user.type(screen.getByLabelText('Pergunta'), 'Pergunta nova');
     await user.click(screen.getByRole('button', { name: 'Enviar' }));

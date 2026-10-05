@@ -148,3 +148,21 @@ export const SunIcon = createIcon(
 );
 
 export const MoonIcon = createIcon(<path d="M13.5 9.5A5.5 5.5 0 0 1 6.5 2.5a5.5 5.5 0 1 0 7 7z" />);
+
+export const CalendarIcon = createIcon(
+  <>
+    <rect x="2" y="3" width="12" height="11" rx="1.5" />
+    <path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3" />
+  </>,
+);
+
+export const ChevronDownIcon = createIcon(<path d="M4 6l4 4 4-4" />);
+
+// The mark of Rota Materiais: a route between two points.
+export const RouteIcon = createIcon(
+  <>
+    <circle cx="3.5" cy="12.5" r="1.5" />
+    <circle cx="12.5" cy="3.5" r="1.5" />
+    <path d="M5 12.5h4.5a2.5 2.5 0 0 0 0-5h-3a2.5 2.5 0 0 1 0-5H11" />
+  </>,
+);

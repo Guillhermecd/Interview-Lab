@@ -1,22 +1,16 @@
-import type { AuthUser, Conversation, UsageSummary } from '@interview-lab/shared';
+import type { Conversation, UsageSummary } from '@interview-lab/shared';
 import { Button } from '../../components/ui/Button';
-import { MoonIcon, SunIcon } from '../../components/ui/icons';
 import { ErrorMessage } from '../../components/ui/ErrorMessage';
 import { Spinner } from '../../components/ui/Spinner';
-import type { ThemeMode } from '../../hooks/useTheme';
 
 interface ConversationSidebarProps {
   conversations: Conversation[];
   isLoading: boolean;
   error: string | undefined;
   selectedId: string | undefined;
-  theme: ThemeMode;
   onSelect: (conversationId: string) => void;
   onNew: () => void;
-  onToggleTheme: () => void;
-  user: AuthUser;
   usage: UsageSummary | undefined;
-  onLogout: () => void;
 }
 
 const numberFormat = new Intl.NumberFormat('pt-BR');
@@ -26,29 +20,13 @@ export function ConversationSidebar({
   isLoading,
   error,
   selectedId,
-  theme,
   onSelect,
   onNew,
-  onToggleTheme,
-  user,
   usage,
-  onLogout,
 }: ConversationSidebarProps) {
   return (
     <aside className="flex w-full flex-col gap-3 border-b border-line bg-surface-2 p-3 md:h-full md:w-[264px] md:border-r md:border-b-0">
-      <div className="flex items-center justify-between gap-2">
-        <h1 className="text-sm font-semibold">Converse com seus dados</h1>
-        <Button
-          variant="ghost"
-          size="md"
-          className="w-7 px-0"
-          onClick={onToggleTheme}
-          aria-label={theme === 'dark' ? 'Usar tema claro' : 'Usar tema escuro'}
-        >
-          {theme === 'dark' ? <SunIcon size={16} /> : <MoonIcon size={16} />}
-        </Button>
-      </div>
-
+      <h1 className="sr-only">Converse com seus dados</h1>
       <Button onClick={onNew}>Nova conversa</Button>
 
       <nav aria-label="Conversas" className="min-h-0 flex-1 overflow-y-auto">
@@ -79,22 +57,14 @@ export function ConversationSidebar({
         </ul>
       </nav>
 
-      <footer className="space-y-2 border-t border-line pt-3 text-[13px]">
-        {usage && (
+      {usage && (
+        <footer className="border-t border-line pt-3">
           <p className="text-xs text-text-3">
             Uso hoje: {numberFormat.format(usage.today.inputTokens + usage.today.outputTokens)} de{' '}
             {numberFormat.format(usage.dailyTokenQuota)} tokens
           </p>
-        )}
-        <div className="flex items-center justify-between gap-2">
-          <span className="truncate" title={user.email}>
-            {user.name}
-          </span>
-          <Button variant="ghost" size="md" onClick={onLogout}>
-            Sair
-          </Button>
-        </div>
-      </footer>
+        </footer>
+      )}
     </aside>
   );
 }

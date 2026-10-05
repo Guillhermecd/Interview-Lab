@@ -1,9 +1,7 @@
-import type { AuthUser } from '@interview-lab/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ErrorMessage } from '../../components/ui/ErrorMessage';
 import { Spinner } from '../../components/ui/Spinner';
 import { useReviewPreference } from '../../hooks/useReviewPreference';
-import { useTheme } from '../../hooks/useTheme';
 import { formatTime } from '../../utils/format';
 import { AiMessage } from './AiMessage';
 import type { ChatItem } from './chat-state';
@@ -21,8 +19,9 @@ const EXAMPLE_QUESTIONS = [
 ];
 
 interface ChatPageProps {
-  user: AuthUser;
-  onLogout: () => void;
+  // A question brought from another screen: written in the composer for the
+  // user to review and send, never sent by itself.
+  initialQuestion?: string | undefined;
 }
 
 // The question an answer replies to: the item right before it.
@@ -31,8 +30,7 @@ function questionBefore(items: ChatItem[], index: number): string | undefined {
   return previous?.kind === 'question' ? previous.text : undefined;
 }
 
-export function ChatPage({ user, onLogout }: ChatPageProps) {
-  const { theme, toggleTheme } = useTheme();
+export function ChatPage({ initialQuestion }: ChatPageProps) {
   const { review, setReview } = useReviewPreference();
   const conversationList = useConversationList();
   const usage = useUsage();
@@ -67,21 +65,17 @@ export function ChatPage({ user, onLogout }: ChatPageProps) {
   }
 
   return (
-    <div className="flex h-dvh flex-col md:flex-row">
+    <div className="flex min-h-0 flex-1 flex-col md:flex-row">
       <ConversationSidebar
         conversations={conversationList.conversations}
         isLoading={conversationList.isLoading}
         error={conversationList.error}
         selectedId={selectedId}
-        theme={theme}
         onSelect={setSelectedId}
         onNew={() => {
           setSelectedId(undefined);
         }}
-        onToggleTheme={toggleTheme}
-        user={user}
         usage={usage.usage}
-        onLogout={onLogout}
       />
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -161,6 +155,7 @@ export function ChatPage({ user, onLogout }: ChatPageProps) {
         <QuestionForm
           isAnswering={chat.isAnswering}
           review={review}
+          initialQuestion={initialQuestion}
           blockedReason={quotaBlock}
           onReviewChange={setReview}
           onAsk={ask}
