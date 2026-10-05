@@ -195,13 +195,16 @@ describe('registry of products and stock movements', () => {
       ['PUT', 'products/1/stock-levels/1'],
       ['GET', 'stock-movements'],
       ['POST', 'stock-movements'],
-    ] as const)('answers 401 without a session and 403 to a viewer: %s %s', async (method, path) => {
-      expect((await call(method, path, '')).statusCode).toBe(401);
+    ] as const)(
+      'answers 401 without a session and 403 to a viewer: %s %s',
+      async (method, path) => {
+        expect((await call(method, path, '')).statusCode).toBe(401);
 
-      const refused = await call(method, path, viewer, {});
-      expect(refused.statusCode).toBe(403);
-      expect(refused.json()).toMatchObject({ code: 'FORBIDDEN' });
-    });
+        const refused = await call(method, path, viewer, {});
+        expect(refused.statusCode).toBe(403);
+        expect(refused.json()).toMatchObject({ code: 'FORBIDDEN' });
+      },
+    );
 
     it('left nothing changed after the refused requests', async () => {
       expect(await count('SELECT count(*) AS total FROM sales.products')).toBe(2);

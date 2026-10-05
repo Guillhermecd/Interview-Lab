@@ -478,6 +478,13 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Data:** 2026-10-05
 - **Motivo:** o que alimenta estoque, ruptura e giro são as movimentações; movimentação é registro de auditoria; o repositório é público e a demonstração será publicada, então escrita exige permissão própria.
 - **Pontos de atenção:** `db:seed` apaga o que foi cadastrado; toda regra (SKU único, quantidade positiva, saída maior que o saldo) é validada no backend.
+- **Ajustes registrados na 09e (2026-10-05):**
+  - **Role:** chama-se `app_catalog_rw`, com senha na variável nova `DB_CATALOG_PASSWORD`. Além de escrever, ela **lê** as três tabelas em que escreve (`products`, `stock_levels`, `stock_movements`): `RETURNING`, `UPDATE ... WHERE` e `ON CONFLICT` exigem `SELECT`. Não lê pedidos, clientes, regiões, centros de distribuição nem nada de `app`, e não tem `DELETE` em nenhuma tabela.
+  - **Administrador:** definido por comando de terminal, não por variável de ambiente (D-58).
+  - **Categoria:** só as existentes (D-59).
+  - **Material arquivado não aceita movimentação** de nenhum tipo; é preciso restaurá-lo antes. Restaurar é uma rota própria.
+  - **Leituras do cadastro** usam o pool somente leitura, como o dashboard; o pool de escrita só escreve.
+  - **O cliente recebe uma capacidade, não o papel:** `/auth/me` devolve `canManageCatalog`. A tela mostra ou esconde a aba com isso, e a API confere de novo em toda requisição.
 
 ### D-57 — Regras de cálculo do dashboard
 - **Contexto:** o protótipo mostra números fixos; as regras abaixo definem como o backend os calcula. Foram escolhidas pelo Claude na implementação da 09c, dentro da D-40.
@@ -495,3 +502,21 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Data:** 2026-10-05
 - **Motivo:** um único lugar para cada regra (`apps/api/src/dashboard/dashboard-rules.ts`), com testes de números conferidos à mão; o frontend só formata.
 - **Ponto de atenção:** os limiares (5 dias, 20%, 80%/95%, 30 dias) são constantes no código, não configuração.
+
+### D-58 — Como alguém se torna administrador do cadastro
+- **Contexto:** a D-56 definia o primeiro administrador por variável de ambiente com o e-mail. Na implementação apareceu o problema: o cadastro de contas é aberto e o e-mail não é verificado, então em ambiente público quem se cadastrasse primeiro com aquele e-mail viraria administrador.
+- **Opções:** comando de terminal | manter a variável `ADMIN_EMAIL` | os dois (variável só fora de produção)
+- **Status:** DECIDIDA
+- **Escolha:** comando de terminal `db:promote-admin <e-mail>`, que roda com a credencial de administrador do banco e promove uma conta que já existe. Não há variável `ADMIN_EMAIL`.
+- **Data:** 2026-10-05
+- **Motivo:** ninguém vira administrador só por se cadastrar; nada na API consegue conceder o papel.
+- **Substitui:** o trecho da D-56 "o primeiro administrador é definido por variável de ambiente com o e-mail".
+- **Custo aceito:** um passo manual depois de criar a conta. Não há comando para rebaixar; isso se faz direto no banco.
+
+### D-59 — Categoria de um material novo
+- **Opções:** só as categorias que já existem | texto livre
+- **Status:** DECIDIDA
+- **Escolha:** só as categorias existentes. O formulário oferece a lista e a API recusa qualquer outra (`400`, campo `category`).
+- **Data:** 2026-10-05
+- **Motivo:** o dashboard tem uma cor por categoria e cinco cores; uma sexta categoria repetiria a cor da primeira.
+- **Custo aceito:** criar uma categoria nova exige mudança no código (e nas cores) depois.

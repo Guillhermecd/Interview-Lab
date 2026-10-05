@@ -81,7 +81,7 @@ escuro) e 834 px.
 
 ## 6. Dívida técnica / pontos de atenção
 - **Seu banco local foi migrado e recarregado.** Rodei `db:migrate` e `db:seed` no ambiente local para conferir a tela: os dados de demonstração antigos de `sales` foram substituídos, como previsto na D-50. Usuários e conversas não foram tocados.
-- **O prompt da IA ficou maior** (8 tabelas em vez de 5), então cada pergunta gasta mais tokens. **Não testei o chat com a IA real:** a `GEMINI_API_KEY` está vazia no `.env` local. Vale rodar a avaliação da Fase 04 de novo quando houver chave.
+- **O prompt da IA ficou maior** (8 tabelas em vez de 5), então cada pergunta gasta mais tokens. **Correção posterior (2026-10-05):** eu tinha escrito aqui que não testei o chat com a IA real porque a `GEMINI_API_KEY` estava vazia no `.env`. Estava errado: a chave vinha da variável de ambiente do sistema, que tem prioridade. Depois do PR fiz uma pergunta pela API local ("Quantos centros de distribuição existem em cada região?"): a IA usou a tabela nova `distribution_centers`, o SQL passou pela guarda e a resposta veio certa, com 2.117 tokens. A avaliação completa da Fase 04 não foi refeita.
 - **`evaluation-questions.ts` ainda fala em "categoria de produto"**, que continua válido, mas as perguntas não cobrem estoque nem centros de distribuição.
 - **Seed mais lento:** cerca de 11 s (antes, 1 a 2 s). Ele roda em seis suítes de integração.
 - **Sair do chat interrompe a resposta.** Com o roteador, ir para o dashboard desmonta a tela do chat: a resposta em andamento é cancelada e a conversa selecionada se perde. É comportamento novo deste PR; o chat suspenso da 09d resolve para quem está no dashboard.
