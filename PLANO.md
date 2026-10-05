@@ -20,7 +20,7 @@ tabela/gráfico + explicação, em streaming.
 | 06 | Frontend: chat, tabela, gráfico, editor SQL | D-06 | CONCLUÍDA |
 | 07 | Human-in-the-loop (revisar/editar SQL) | — | CONCLUÍDA |
 | 08 | Autenticação, tokens por usuário, rate limit, cache | D-07b, D-08 | CONCLUÍDA |
-| 09a | Design: tokens, tema, componentes e chat reestilizado | D-38, D-39, D-41, D-44, D-45, D-46, D-47 | EM ANDAMENTO |
+| 09a | Design: tokens, tema, componentes e chat reestilizado | D-38, D-39, D-41, D-44, D-45, D-46, D-47 | CONCLUÍDA |
 | 09b | Design: tela do chat em três colunas e painel de schema | D-41, D-43, D-48 | PENDENTE |
 | 09c | Design: dashboard operacional | D-40 | PENDENTE |
 | 09d | Design: chat suspenso no dashboard | D-42 | PENDENTE |
@@ -134,7 +134,7 @@ fluxo real que já existe, sem simular a API (D-39). Quatro PRs, cada um com bra
 - Componentes `SqlBlock`, `Alert`, `AiMessage` e `KpiCard` com as props do handoff.
 - Chat atual usando os componentes novos, com os estados: gerando, revisão, executando,
   streaming, concluído, bloqueado, timeout, resultado vazio, rate limit e cota.
-- Contrato: `cached` no evento `done` e `retryAfterSeconds` no erro `RATE_LIMITED` (D-41).
+- Contrato: `cached` no evento `done` e `retryAfterSeconds` nos erros de limite de uso (D-41).
 
 **Verificação:** testes das transições de estado do `AiMessage`, do `SqlBlock` marcando
 "editado" ao salvar e do botão Executar desabilitado quando bloqueado; testes existentes

@@ -351,10 +351,11 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 ### D-41 — Mudanças no contrato da API para o novo chat
 - **Opções:** cada item abaixo pode ser adicionado ao contrato ou o estado correspondente fica fora da tela
 - **Status:** DECIDIDA
-- **Escolha:** adicionar (1) `GET /api/schema`, com as tabelas e colunas expostas; (2) `cached` no evento `done`; (3) `retryAfterSeconds` no erro `RATE_LIMITED`; (4) o status da última resposta em cada item da lista de conversas. **Não** adicionar a posição do trecho recusado pela guarda SQL: o bloqueio mostra só o motivo.
+- **Escolha:** adicionar (1) `GET /api/schema`, com as tabelas e colunas expostas; (2) `cached` no evento `done`; (3) `retryAfterSeconds` nos erros de limite de uso (`RATE_LIMITED` e `QUOTA_EXCEEDED`); (4) o status da última resposta em cada item da lista de conversas. **Não** adicionar a posição do trecho recusado pela guarda SQL: o bloqueio mostra só o motivo.
 - **Data:** 2026-10-05
 - **Motivo:** os quatro itens alimentam estados obrigatórios do handoff (painel de schema, selo "Resposta do cache", contagem regressiva do rate limit, badges da lista) com dados que só o backend conhece. A posição do trecho exigiria mexer na guarda SQL, que é caminho de segurança, por um ganho só visual.
 - **Fases:** (2) e (3) na 09a; (1) e (4) na 09b.
+- **Alcance do item (3), registrado na 09a:** a recomendação aprovada citava só `RATE_LIMITED`. O campo também vai em `QUOTA_EXCEEDED` (segundos até a meia-noite UTC), porque o alerta de cota do handoff mostra "Renova em". Como o limite de tentativas de login usa o mesmo erro `RATE_LIMITED`, a resposta 429 do login passa a trazer o campo também.
 
 ### D-42 — Contexto do "Perguntar sobre isto"
 - **Opções:** prefixar o contexto no texto da pergunta | campo novo em `AskQuestionRequest`
