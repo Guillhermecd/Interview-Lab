@@ -127,6 +127,7 @@ export async function startTestDatabase(options: { redis?: boolean } = {}): Prom
       },
       redis: { url: redisUrl },
       limits: { ...DEFAULT_TEST_LIMITS, ...envOptions.limits },
+      dashboard: { onTimeTargetPercent: 95 },
     }),
     stop: async () => {
       await Promise.all([container.stop(), redis?.stop()]);

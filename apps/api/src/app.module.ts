@@ -5,6 +5,7 @@ import { OriginGuard } from './auth/origin.guard.js';
 import type { AppEnv } from './config/env.js';
 import { AppDataModule } from './conversation/app-data.module.js';
 import { ConversationModule } from './conversation/conversation.module.js';
+import { DashboardModule } from './dashboard/dashboard.module.js';
 import { HealthModule } from './health/health.module.js';
 import { LimitsModule } from './limits/limits.module.js';
 import { QueryModule } from './query/query.module.js';
@@ -23,6 +24,7 @@ export class AppModule {
         QueryModule.register(env),
         HealthModule,
         ConversationModule.register(env),
+        DashboardModule.register(env),
       ],
       // CSRF protection on every route (D-08).
       providers: [{ provide: APP_GUARD, useExisting: OriginGuard }],

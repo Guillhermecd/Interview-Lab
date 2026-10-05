@@ -25,6 +25,9 @@ const MAX_LLM_TIMEOUT_MS = 120_000;
 const DEFAULT_EXPLAIN_MAX_ROWS = 50;
 const MAX_EXPLAIN_ROWS = 1000;
 
+const DEFAULT_ON_TIME_TARGET_PERCENT = 95;
+const MAX_PERCENT = 100;
+
 const MAX_POOL_SIZE = 100;
 const MAX_QUERY_ROWS = 10_000;
 const MIN_TIMEOUT_MS = 100;
@@ -69,6 +72,11 @@ export interface AppDatabaseEnv extends DatabaseConnectionEnv {
   poolMax: number;
 }
 
+export interface DashboardEnv {
+  // Share of deliveries expected on time, shown as the target (D-55).
+  onTimeTargetPercent: number;
+}
+
 export interface AppEnv {
   port: number;
   database: ReadonlyDatabaseEnv;
@@ -78,6 +86,7 @@ export interface AppEnv {
   auth: AuthEnv;
   redis: RedisEnv;
   limits: LimitsEnv;
+  dashboard: DashboardEnv;
 }
 
 export function loadDatabaseConnectionEnv(source: NodeJS.ProcessEnv): DatabaseConnectionEnv {
@@ -138,6 +147,16 @@ export function loadLlmEnv(source: NodeJS.ProcessEnv): LlmEnv {
   };
 }
 
+export function loadDashboardEnv(source: NodeJS.ProcessEnv): DashboardEnv {
+  return {
+    onTimeTargetPercent: parseInteger(source, 'ON_TIME_DELIVERY_TARGET_PERCENT', {
+      defaultValue: DEFAULT_ON_TIME_TARGET_PERCENT,
+      min: 1,
+      max: MAX_PERCENT,
+    }),
+  };
+}
+
 export function loadEnv(source: NodeJS.ProcessEnv): AppEnv {
   const connection = loadDatabaseConnectionEnv(source);
   const poolMax = parseInteger(source, 'DB_POOL_MAX', {
@@ -163,5 +182,6 @@ export function loadEnv(source: NodeJS.ProcessEnv): AppEnv {
     auth: loadAuthEnv(source),
     redis: loadRedisEnv(source),
     limits: loadLimitsEnv(source),
+    dashboard: loadDashboardEnv(source),
   };
 }
