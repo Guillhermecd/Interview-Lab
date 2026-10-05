@@ -57,12 +57,21 @@ test('asks a question and sees SQL, chart, table and explanation', async ({ page
     answer.getByText('O Centro-Oeste liderou o faturamento no trimestre.'),
   ).toBeVisible();
   await expect(answer.getByLabel('SQL gerado')).toContainText('GROUP BY r.name');
+  await expect(answer.getByRole('table')).toContainText('2.498.013,89');
+  await expect(answer.getByRole('row')).toHaveCount(6);
+  await expect(answer.getByText('1.720 tokens')).toBeVisible();
+
+  await answer.getByRole('tab', { name: 'Gráfico' }).click();
   await expect(
     answer.getByRole('figure', { name: 'Gráfico de barras: faturamento por regiao' }),
   ).toBeVisible();
   await expect(answer.locator('.recharts-bar-rectangle')).toHaveCount(5);
-  await expect(answer.getByRole('table')).toContainText('2.498.013,89');
-  await expect(answer.getByRole('row')).toHaveCount(6);
+
+  // The user can draw the same columns as a donut.
+  await answer.getByRole('button', { name: 'Rosca' }).click();
+  await expect(
+    answer.getByRole('figure', { name: 'Gráfico de rosca: faturamento por regiao' }),
+  ).toBeVisible();
 
   // The new conversation appears in the list, titled by the first question.
   await expect(

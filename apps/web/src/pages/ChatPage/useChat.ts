@@ -4,8 +4,11 @@ import type { AskMode } from '@interview-lab/shared';
 import { ConversationService, type AnswerEvent } from '../../api/modules/conversation.service';
 import {
   applyAnswerEvent,
+  cancelReview as cancelPendingReview,
+  editReviewDraft,
   itemsFromMessages,
   newAnswer,
+  reopenReview as reopenPendingReview,
   startReviewExecution,
   type AnswerItem,
   type ChatItem,
@@ -18,6 +21,11 @@ interface ChatState {
   isAnswering: boolean;
   ask: (question: string, mode?: AskMode) => Promise<void>;
   executeReview: (answerId: string, messageId: string, sql: string) => Promise<void>;
+  // Review mode, on screen only: change the SQL to send (undefined goes back to
+  // the generated one), give up running it, or review it again.
+  editReview: (answerId: string, sql: string | undefined) => void;
+  cancelReview: (answerId: string) => void;
+  reopenReview: (answerId: string) => void;
   cancel: () => void;
 }
 
@@ -125,7 +133,12 @@ export function useChat(
           updateAnswer(answerId, (answer) =>
             applyAnswerEvent(answer, {
               event: 'error',
-              data: { code: apiError.code, message: apiError.message, details: apiError.details },
+              data: {
+                code: apiError.code,
+                message: apiError.message,
+                details: apiError.details,
+                retryAfterSeconds: apiError.retryAfterSeconds,
+              },
             }),
           );
         }
@@ -142,9 +155,10 @@ export function useChat(
   const ask = useCallback(
     async (question: string, mode: AskMode = 'auto') => {
       const answerId = localId('answer');
+      const now = new Date().toISOString();
       const pending: ChatItem[] = [
-        { kind: 'question', id: localId('question'), text: question },
-        newAnswer(answerId),
+        { kind: 'question', id: localId('question'), text: question, time: now },
+        newAnswer(answerId, now),
       ];
       setLoaded((current) => ({
         conversationId,
@@ -191,6 +205,27 @@ export function useChat(
     [conversationId, follow, updateAnswer],
   );
 
+  const editReview = useCallback(
+    (answerId: string, sql: string | undefined) => {
+      updateAnswer(answerId, (answer) => editReviewDraft(answer, sql));
+    },
+    [updateAnswer],
+  );
+
+  const cancelReview = useCallback(
+    (answerId: string) => {
+      updateAnswer(answerId, cancelPendingReview);
+    },
+    [updateAnswer],
+  );
+
+  const reopenReview = useCallback(
+    (answerId: string) => {
+      updateAnswer(answerId, reopenPendingReview);
+    },
+    [updateAnswer],
+  );
+
   const cancel = useCallback(() => {
     abortRef.current?.abort();
   }, []);
@@ -202,6 +237,9 @@ export function useChat(
     isAnswering,
     ask,
     executeReview,
+    editReview,
+    cancelReview,
+    reopenReview,
     cancel,
   };
 }

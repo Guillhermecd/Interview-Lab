@@ -4,7 +4,9 @@ import { ErrorMessage } from '../../components/ui/ErrorMessage';
 import { Spinner } from '../../components/ui/Spinner';
 import { useReviewPreference } from '../../hooks/useReviewPreference';
 import { useTheme } from '../../hooks/useTheme';
-import { AnswerCard } from './AnswerCard';
+import { formatTime } from '../../utils/format';
+import { AiMessage } from './AiMessage';
+import type { ChatItem } from './chat-state';
 import { ConversationSidebar } from './ConversationSidebar';
 import { QuestionForm } from './QuestionForm';
 import { useChat } from './useChat';
@@ -17,9 +19,26 @@ const EXAMPLE_QUESTIONS = [
   'Como evoluiu o número de pedidos por mês?',
 ];
 
+const QUOTA_CODE = 'QUOTA_EXCEEDED';
+
 interface ChatPageProps {
   user: AuthUser;
   onLogout: () => void;
+}
+
+// The server refused the last question because the daily quota ran out: asking
+// again gets the same answer, so the composer says why instead.
+function quotaMessage(items: ChatItem[]): string | undefined {
+  const last = items.at(-1);
+  return last?.kind === 'answer' && last.error?.code === QUOTA_CODE
+    ? last.error.message
+    : undefined;
+}
+
+// The question an answer replies to: the item right before it.
+function questionBefore(items: ChatItem[], index: number): string | undefined {
+  const previous = items[index - 1];
+  return previous?.kind === 'question' ? previous.text : undefined;
 }
 
 export function ChatPage({ user, onLogout }: ChatPageProps) {
@@ -74,20 +93,20 @@ export function ChatPage({ user, onLogout }: ChatPageProps) {
         onLogout={onLogout}
       />
 
-      <main className="flex min-h-0 flex-1 flex-col">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col">
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-4xl space-y-4 p-4">
+          <div className="mx-auto max-w-[900px] space-y-5 p-6">
             {chat.isLoadingHistory && <Spinner label="Carregando a conversa…" />}
             {chat.historyError && <ErrorMessage message={chat.historyError} />}
 
             {!chat.isLoadingHistory && !chat.historyError && chat.items.length === 0 && (
               <section className="space-y-3 py-10 text-center">
-                <h2 className="text-lg font-semibold">Pergunte em português</h2>
-                <p className="text-sm text-muted">
+                <h2 className="text-xl font-semibold tracking-[-0.015em]">Pergunte em português</h2>
+                <p className="mx-auto max-w-[60ch] text-sm text-text-2">
                   A IA escreve o SQL, ele é validado e executado com um usuário somente leitura, e a
                   resposta volta com tabela, gráfico e explicação.
                 </p>
-                <ul className="flex flex-wrap justify-center gap-2">
+                <ul className="flex flex-wrap justify-center gap-2 pt-2">
                   {EXAMPLE_QUESTIONS.map((question) => (
                     <li key={question}>
                       <button
@@ -96,7 +115,7 @@ export function ChatPage({ user, onLogout }: ChatPageProps) {
                           ask(question);
                         }}
                         disabled={chat.isAnswering}
-                        className="rounded-full border border-border bg-surface px-3 py-1 text-sm hover:bg-surface-sunken"
+                        className="cursor-pointer rounded-lg border border-line bg-surface px-3 py-2 text-[13px] hover:border-line-2 hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-accent"
                       >
                         {question}
                       </button>
@@ -106,25 +125,44 @@ export function ChatPage({ user, onLogout }: ChatPageProps) {
               </section>
             )}
 
-            {chat.items.map((item) =>
-              item.kind === 'question' ? (
-                <p
-                  key={item.id}
-                  className="ml-auto w-fit max-w-[85%] rounded-xl bg-primary px-4 py-2 text-sm text-on-primary"
-                >
-                  {item.text}
-                </p>
-              ) : (
-                <AnswerCard
+            {chat.items.map((item, index) => {
+              if (item.kind === 'question') {
+                return (
+                  <div
+                    key={item.id}
+                    className="ml-auto flex w-fit max-w-[85%] flex-col items-end gap-1"
+                  >
+                    <span className="text-xs text-text-3">Você · {formatTime(item.time)}</span>
+                    <p className="rounded-[12px_12px_3px_12px] bg-surface-3 px-3.5 py-2.5 text-sm whitespace-pre-wrap">
+                      {item.text}
+                    </p>
+                  </div>
+                );
+              }
+              const question = questionBefore(chat.items, index);
+              return (
+                <AiMessage
                   key={item.id}
                   answer={item}
                   isBusy={chat.isAnswering}
+                  usage={usage.usage}
                   onExecuteReview={(answerId, messageId, sql) => {
                     void chat.executeReview(answerId, messageId, sql);
                   }}
+                  onEditReview={chat.editReview}
+                  onCancelReview={chat.cancelReview}
+                  onReopenReview={chat.reopenReview}
+                  onStop={chat.cancel}
+                  onRetry={
+                    question === undefined || chat.isAnswering
+                      ? undefined
+                      : () => {
+                          ask(question);
+                        }
+                  }
                 />
-              ),
-            )}
+              );
+            })}
             <div ref={endRef} />
           </div>
         </div>
@@ -132,6 +170,7 @@ export function ChatPage({ user, onLogout }: ChatPageProps) {
         <QuestionForm
           isAnswering={chat.isAnswering}
           review={review}
+          blockedReason={quotaMessage(chat.items)}
           onReviewChange={setReview}
           onAsk={ask}
           onCancel={chat.cancel}

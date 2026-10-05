@@ -54,6 +54,13 @@ const ANSWER: StreamEvent[] = [
   },
 ];
 
+const USAGE = {
+  today: { inputTokens: 1200, outputTokens: 300, calls: 4 },
+  dailyTokenQuota: 200_000,
+  questionsPerMinute: 10,
+  byConversation: [],
+};
+
 let api: FakeApi;
 
 beforeEach(() => {
@@ -106,9 +113,17 @@ describe('ChatPage', () => {
       'SELECT regiao, pedidos FROM x',
     );
     expect(within(answer).getByRole('table')).toHaveTextContent('4.017');
+    // What the answer cost, as sent by the server.
+    expect(answer).toHaveTextContent('0,01 s');
+    expect(answer).toHaveTextContent('2 linhas');
+    expect(answer).toHaveTextContent('15 tokens');
+
+    // The chart suggested by the server is on the second tab.
+    await userEvent.click(within(answer).getByRole('tab', { name: 'Gráfico' }));
     expect(
       within(answer).getByRole('figure', { name: 'Gráfico de barras: pedidos por regiao' }),
     ).toBeInTheDocument();
+    expect(answer).toHaveTextContent('Sugerido: Barras');
     expect(screen.getByText('Quais são as regiões?', { selector: 'main p' })).toBeInTheDocument();
     expect(api.calls.find((call) => call.key === `POST ${MESSAGES_URL}`)?.body).toEqual({
       question: 'Quais são as regiões?',
@@ -148,6 +163,9 @@ describe('ChatPage', () => {
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('A consulta foi recusada pelas regras de segurança.');
     expect(alert).toHaveTextContent('Apenas consultas SELECT são permitidas.');
+    // A blocked query cannot be run from the screen.
+    expect(screen.getByText('Bloqueado')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Executar' })).toBeDisabled();
   });
 
   it('shows a request refused before the stream started', async () => {
@@ -236,7 +254,7 @@ describe('ChatPage', () => {
     render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
     await user.click(await screen.findByRole('button', { name: CONVERSATION.title ?? '' }));
     await askQuestion('Pergunta demorada');
-    await screen.findByText('Executando a consulta…');
+    await screen.findByText(/Executando consulta…/);
 
     await user.click(screen.getByRole('button', { name: 'Parar' }));
 
@@ -244,6 +262,103 @@ describe('ChatPage', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Enviar' })).toBeInTheDocument();
     });
+  });
+
+  it('stops the query from the SQL block while it runs', async () => {
+    api
+      .on(`GET ${CONVERSATIONS_URL}`, () => jsonResponse({ items: [CONVERSATION] }))
+      .on(`GET ${MESSAGES_URL}`, () => jsonResponse({ items: [] }))
+      .on(`POST ${MESSAGES_URL}`, (init) => {
+        if (!init.signal) {
+          throw new Error('The answer request must be abortable');
+        }
+        return openSseResponse(
+          [{ event: 'sql', data: { sql: 'SELECT 1', attempt: 1 } }],
+          init.signal,
+        );
+      });
+    const user = userEvent.setup();
+    render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
+    await user.click(await screen.findByRole('button', { name: CONVERSATION.title ?? '' }));
+    await askQuestion('Pergunta demorada');
+
+    await user.click(await screen.findByRole('button', { name: 'Interromper' }));
+
+    expect(await screen.findByText('Resposta cancelada.')).toBeInTheDocument();
+  });
+
+  it('shows the countdown of the rate limit and asks again on request', async () => {
+    let refuse = true;
+    api
+      .on(`GET ${CONVERSATIONS_URL}`, () => jsonResponse({ items: [CONVERSATION] }))
+      .on(`GET ${MESSAGES_URL}`, () => jsonResponse({ items: [] }))
+      .on('GET /api/usage', () => jsonResponse(USAGE))
+      .on(`POST ${MESSAGES_URL}`, (init) => {
+        if (refuse) {
+          refuse = false;
+          return jsonResponse(
+            { code: 'RATE_LIMITED', message: 'Muitas requisições.', retryAfterSeconds: 42 },
+            429,
+          );
+        }
+        return sseResponse(ANSWER, init.signal);
+      });
+    const user = userEvent.setup();
+    render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
+    await user.click(await screen.findByRole('button', { name: CONVERSATION.title ?? '' }));
+
+    await askQuestion('Quais são as regiões?');
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Muitas perguntas em sequência');
+    // The limit shown is the one the server reports, not a fixed number.
+    expect(alert).toHaveTextContent('O limite é de 10 perguntas por minuto.');
+    expect(within(alert).getByRole('timer')).toHaveTextContent('00:42');
+
+    await user.click(within(alert).getByRole('button', { name: 'Tentar novamente' }));
+
+    expect(await screen.findByText('O Sul tem mais pedidos.')).toBeInTheDocument();
+    expect(
+      api.calls.filter((call) => call.key === `POST ${MESSAGES_URL}`).map((call) => call.body),
+    ).toEqual([
+      { question: 'Quais são as regiões?', mode: 'auto' },
+      { question: 'Quais são as regiões?', mode: 'auto' },
+    ]);
+  });
+
+  it('blocks the composer when the daily quota is over', async () => {
+    api
+      .on(`GET ${CONVERSATIONS_URL}`, () => jsonResponse({ items: [CONVERSATION] }))
+      .on(`GET ${MESSAGES_URL}`, () => jsonResponse({ items: [] }))
+      .on('GET /api/usage', () =>
+        jsonResponse({
+          ...USAGE,
+          today: { inputTokens: 150_000, outputTokens: 50_000, calls: 90 },
+        }),
+      )
+      .on(`POST ${MESSAGES_URL}`, () =>
+        jsonResponse(
+          {
+            code: 'QUOTA_EXCEEDED',
+            message: 'A cota diária de uso da IA foi atingida.',
+            retryAfterSeconds: 34_020,
+          },
+          429,
+        ),
+      );
+    const user = userEvent.setup();
+    render(<ChatPage user={TEST_USER} onLogout={() => undefined} />);
+    await user.click(await screen.findByRole('button', { name: CONVERSATION.title ?? '' }));
+
+    await askQuestion('Quais são as regiões?');
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Cota diária de tokens atingida');
+    expect(within(alert).getByRole('timer')).toHaveTextContent('9:27:00');
+    expect(alert).toHaveTextContent('200.000 / 200.000');
+    expect(within(alert).queryByRole('button', { name: 'Tentar novamente' })).toBeNull();
+    expect(screen.getByLabelText('Pergunta')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Enviar' })).toBeDisabled();
   });
 
   it('shows the failure to load the conversation list', async () => {
