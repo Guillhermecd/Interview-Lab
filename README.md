@@ -126,6 +126,8 @@ cp .env.example .env
 docker compose up -d postgres redis
 
 # Migrations + senhas das roles + dados de demonstração
+# (quem já tinha o banco: a migration do dashboard limpa os dados de demonstração;
+#  rode db:setup, ou db:migrate seguido de db:seed, para recarregá-los)
 pnpm --filter @interview-lab/api db:setup
 
 # API em http://localhost:3000/api/health

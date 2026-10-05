@@ -426,6 +426,7 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
   - `orders` ganha `distribution_center_id`, `expected_delivery_at` e `delivered_at`.
 - **Data:** 2026-10-05
 - **Motivo:** padrão de nomenclatura do projeto; não quebra a guarda SQL, o prompt nem os testes existentes.
+- **Acréscimo registrado na 09c (2026-10-05):** `products` ganhou também a coluna `active`, que não estava na lista aprovada. A D-56 já tinha escolhido arquivar materiais com `active = false`; criar a coluna nesta migration evita uma segunda migration que apaga dados na 09e.
 - **Custo aceito:** a migration apaga os dados de demonstração de `sales` (as colunas novas são `NOT NULL`); `db:seed` recria tudo. O schema `app` não é tocado. As tabelas novas entram na allowlist da guarda e no contexto do prompt, que fica maior.
 
 ### D-51 — Dados de demonstração do dashboard
@@ -479,9 +480,9 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Pontos de atenção:** `db:seed` apaga o que foi cadastrado; toda regra (SKU único, quantidade positiva, saída maior que o saldo) é validada no backend.
 
 ### D-57 — Regras de cálculo do dashboard
-- **Contexto:** o protótipo mostra números fixos; as regras abaixo definem como o backend os calcula. Foram escolhidas na implementação da 09c, dentro da D-40, e ficam registradas para revisão.
-- **Status:** DECIDIDA
-- **Escolha:**
+- **Contexto:** o protótipo mostra números fixos; as regras abaixo definem como o backend os calcula. Foram escolhidas pelo Claude na implementação da 09c, dentro da D-40.
+- **Status:** PROPOSTA — aplicada na 09c, aguardando revisão do Guilherme
+- **Proposta aplicada:**
   - **Dia e período:** os dias são contados no fuso `America/Sao_Paulo`, qualquer que seja o fuso do servidor ou do navegador. "Mês", "Trimestre" e "Ano" vão do início do período até hoje. A comparação é sempre com o período imediatamente anterior, de mesma duração em dias.
   - **Faturamento e pedidos:** só pedidos com status diferente de `cancelled`, pela data do pedido. Ticket médio é faturamento dividido por pedidos.
   - **Estoque no passado:** o saldo de uma data é o saldo de hoje menos tudo o que movimentou depois dela. Valor em estoque é quantidade vezes custo, incluindo materiais arquivados.

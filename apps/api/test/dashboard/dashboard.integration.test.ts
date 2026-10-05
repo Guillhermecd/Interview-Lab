@@ -526,6 +526,21 @@ describe('dashboard endpoints', () => {
       }
     });
 
+    // The heaviest request the API accepts: the longest custom period, whose
+    // comparison reaches back before the first movement.
+    it('answers the longest custom period within the statement timeout', async () => {
+      const day = (daysAgo: number) =>
+        new Date(Date.now() - daysAgo * 86_400_000).toISOString().slice(0, 10);
+
+      const overview = await get<DashboardOverview>(
+        `overview?period=custom&from=${day(731)}&to=${day(1)}`,
+      );
+
+      expect(overview.revenueSeries).toHaveLength(731);
+      expect(overview.kpis.revenue.value).toBeGreaterThan(0);
+      expect(overview.kpis.stockValue.spark).toHaveLength(7);
+    });
+
     it('has alerts and movements to show', async () => {
       const alerts = await get<StockAlertList>('stock-alerts');
       const movements = await get<StockMovementList>('stock-movements');

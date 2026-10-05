@@ -24,7 +24,7 @@ superior.
   - barra superior com marca, navegação, tema, iniciais e nome do usuário, e "Sair";
   - página do dashboard: filtros fixos (período, intervalo personalizado, centro, região, categoria), 6 indicadores com `KpiCard`, 5 gráficos, 2 tabelas com chips de filtro, grid responsivo;
   - "Perguntar" em cada card leva ao chat com a pergunta e o contexto escritos no composer.
-- **Testes:** API unitários de 448 para 511 e integração de 204 para 250; web de 149 para 179; E2E de 7 para 11.
+- **Testes:** API unitários de 448 para 511 e integração de 204 para 251; web de 149 para 179; E2E de 7 para 11.
 - **Documentação:** `README.md` (banco, rotas, telas, fases) e `.env.example` (`ON_TIME_DELIVERY_TARGET_PERCENT`).
 
 ## 2. Por que foi feito assim
@@ -49,14 +49,15 @@ superior.
 | Lint | ✅ | ESLint + Prettier |
 | Typecheck | ✅ | |
 | Testes unitários | ✅ | 690 passaram / 690 total (API 511, web 179) |
-| Testes de integração | ✅ | 250 passaram / 250 total |
+| Testes de integração | ✅ | 251 passaram / 251 total |
 | Build | ✅ | sem aviso de tamanho |
 | E2E | ✅ | 11 passaram / 11 total |
 
 Os testes de integração do dashboard usam um conjunto pequeno de dados feito à mão, com
 cada resultado conferido no comentário do teste (faturamento, estoque reconstruído,
 cobertura, status, ABC, fuso horário, filtros). Um segundo bloco roda as mesmas rotas
-sobre o seed completo, para provar que cabem no limite de 5 s.
+sobre o seed completo, inclusive o maior período aceito (731 dias), para provar que
+cabem no limite de 5 s.
 
 Conferência visual por capturas de tela com a API e o seed reais: 1440 px (claro e
 escuro) e 834 px.
@@ -69,7 +70,12 @@ escuro) e 834 px.
 - **Ajustes vistos nas capturas:** selo de variação quebrava linha, coluna "Material" ficava cortada, e as últimas movimentações do seed tinham todas o mesmo horário. Corrigidos.
 
 ## 5. Decisões que preciso que você tome
-- **Revisar as regras da D-57.** Em especial: limiares dos alertas (crítico até 5 dias de cobertura; "OK" até 20% acima do mínimo), classes ABC (80% / 95%), "Mês" como mês corrente até hoje, e comparação sempre com o período anterior de mesma duração. Estão implementadas e testadas; mudar qualquer uma é trocar uma constante.
+- **Revisar as regras da D-57 (status "PROPOSTA").** Em especial: limiares dos alertas (crítico até 5 dias de cobertura; "OK" até 20% acima do mínimo), classes ABC (80% / 95%), "Mês" como mês corrente até hoje, e comparação sempre com o período anterior de mesma duração. Estão implementadas e testadas; mudar qualquer uma é trocar uma constante.
+- **Proteger o chat da carga do dashboard.** As rotas do dashboard não têm limite por usuário e dividem com o chat o pool somente leitura (10 conexões); o cadastro é aberto. Poucos clientes chamando `/overview` em paralelo podem deixar o chat sem conexão. Em demonstração pública isso é um risco de disponibilidade. Opções:
+  - limite por usuário com o `RateLimiter` que já existe (poucas linhas; não resolve vários usuários ao mesmo tempo);
+  - cache curto do `overview` no Redis, por período e filtros (resolve a repetição; dado até N segundos atrasado);
+  - pool pequeno e separado para o dashboard (isola o chat de vez; mais uma configuração).
+  Recomendação: pool separado mais cache de 30 a 60 s, na Fase 10 (hardening), antes do deploy. Nada disso foi executado.
 - **Merge deste PR:** `! gh pr merge <número> --squash`, com o CI verde.
 - **Antes da 09e (cadastro), duas confirmações:** o nome da variável do e-mail do administrador (proponho `ADMIN_EMAIL`) e o nome da role de escrita no banco (proponho `app_catalog_rw`). Nada da 09e foi executado.
 
@@ -78,6 +84,9 @@ escuro) e 834 px.
 - **O prompt da IA ficou maior** (8 tabelas em vez de 5), então cada pergunta gasta mais tokens. **Não testei o chat com a IA real:** a `GEMINI_API_KEY` está vazia no `.env` local. Vale rodar a avaliação da Fase 04 de novo quando houver chave.
 - **`evaluation-questions.ts` ainda fala em "categoria de produto"**, que continua válido, mas as perguntas não cobrem estoque nem centros de distribuição.
 - **Seed mais lento:** cerca de 11 s (antes, 1 a 2 s). Ele roda em seis suítes de integração.
+- **Sair do chat interrompe a resposta.** Com o roteador, ir para o dashboard desmonta a tela do chat: a resposta em andamento é cancelada e a conversa selecionada se perde. É comportamento novo deste PR; o chat suspenso da 09d resolve para quem está no dashboard.
+- **Quem já tem o banco precisa rodar `db:migrate` e `db:seed`:** a migration limpa `sales`, e sem o seed o dashboard abre vazio. Está no README.
+- **Entre cerca de 768 e 800 px**, o gráfico de linha pede duas colunas numa grade que só tem uma; a grade cria uma segunda coluna estreita. Não verifiquei essa faixa; as larguras conferidas foram 834 e 1440.
 - **Diferenças em relação ao handoff:**
   - "Perguntar" navega para `/chat`; a janela suspensa é a 09d.
   - Sem "atualizado há 4 min": a tela mostra "Dados até" com a hora da resposta.
