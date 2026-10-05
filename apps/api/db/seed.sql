@@ -210,7 +210,12 @@ ORDER BY picks.order_id, picks.product_id;
 INSERT INTO sales.stock_movements
   (moved_at, type, product_id, distribution_center_id, quantity, responsible_name, document)
 SELECT
-  least(orders.ordered_at + interval '1 day', now()),
+  -- Picked and shipped some hours after the order; for an order placed just
+  -- now, halfway between the order and now, so it is never in the future.
+  least(
+    orders.ordered_at + (2 + (items.product_id + orders.id) % 30) * interval '1 hour',
+    orders.ordered_at + (now() - orders.ordered_at) / 2
+  ),
   'outbound',
   items.product_id,
   orders.distribution_center_id,
