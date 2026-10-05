@@ -424,10 +424,15 @@ describe('security over HTTP', () => {
       expect(statuses).toEqual([200, 200, 429]);
       expect(provider.requests).toHaveLength(2);
       const refused = await ask(app, cookie, conversation.id, 'Mais uma');
-      expect(refused.json()).toEqual({
+      const refusedBody = refused.json<{ retryAfterSeconds: number }>();
+      expect(refusedBody).toEqual({
         code: 'RATE_LIMITED',
         message: 'Muitas requisições em pouco tempo. Aguarde um minuto e tente de novo.',
+        retryAfterSeconds: expect.any(Number) as number,
       });
+      // The window is one minute long (D-37).
+      expect(refusedBody.retryAfterSeconds).toBeGreaterThanOrEqual(1);
+      expect(refusedBody.retryAfterSeconds).toBeLessThanOrEqual(60);
     });
 
     it('refuses questions once the daily token quota is used, without calling the LLM', async () => {
@@ -445,7 +450,11 @@ describe('security over HTTP', () => {
 
       expect(first.statusCode).toBe(200);
       expect(second.statusCode).toBe(429);
-      expect(second.json()).toMatchObject({ code: 'QUOTA_EXCEEDED' });
+      const quotaBody = second.json<{ code: string; retryAfterSeconds: number }>();
+      expect(quotaBody.code).toBe('QUOTA_EXCEEDED');
+      // The quota resets at the next UTC midnight: never more than a day away.
+      expect(quotaBody.retryAfterSeconds).toBeGreaterThanOrEqual(1);
+      expect(quotaBody.retryAfterSeconds).toBeLessThanOrEqual(86_400);
       expect(provider.requests).toHaveLength(1);
     });
 
@@ -486,6 +495,7 @@ describe('security over HTTP', () => {
       expect(events.find((event) => event.event === 'rows')?.data).toMatchObject({
         result: { rows: [['5']] },
       });
+      expect(events.at(-1)).toMatchObject({ event: 'done', data: { cached: false } });
 
       // A new region appears; the same question (in other words) is asked again.
       await withClient(database.admin, (client) =>
@@ -508,6 +518,8 @@ describe('security over HTTP', () => {
       expect(repeated.find((event) => event.event === 'rows')?.data).toMatchObject({
         result: { rows: [['5']] },
       });
+      // The client is told, so it can mark the answer as coming from the cache.
+      expect(repeated.at(-1)).toMatchObject({ event: 'done', data: { cached: true } });
 
       // The schema changes (a column is added) and the application restarts:
       // the cache keys carry the schema version, so nothing is reused.

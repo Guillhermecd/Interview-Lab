@@ -15,6 +15,8 @@ export interface ApiErrorBody {
   code: string;
   message: string;
   details?: ApiErrorDetail[];
+  // Present on RATE_LIMITED and QUOTA_EXCEEDED: seconds until the limit resets.
+  retryAfterSeconds?: number;
 }
 
 export interface QueryColumn {
@@ -68,6 +70,8 @@ export interface AnsweredQuestion {
   visualization: VisualizationSuggestion;
   // How many times SQL was generated: 2 when the first attempt was refused.
   attempts: number;
+  // True when the SQL was reused from the cache instead of generated now.
+  cached: boolean;
   usage: TokenUsage;
 }
 
@@ -163,6 +167,8 @@ export interface DoneStreamEvent {
   usage: TokenUsage;
   // Present when a reviewed SQL was executed.
   edited?: boolean;
+  // Present on an answered question: the SQL came from the cache.
+  cached?: boolean;
 }
 
 export interface AnswerStreamEvents {

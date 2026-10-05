@@ -7,6 +7,14 @@ import { UsageRepository, type UsageKind } from './usage.repository.js';
 
 export const LIMITS_ENV = Symbol('LIMITS_ENV');
 
+const MILLISECONDS_PER_SECOND = 1000;
+
+// The daily quota is counted per UTC day, so it resets at the next UTC midnight.
+function secondsUntilUtcMidnight(now: Date): number {
+  const nextMidnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+  return Math.ceil((nextMidnight - now.getTime()) / MILLISECONDS_PER_SECOND);
+}
+
 // Rule 7: rate limit and daily quota are checked before any call to the LLM.
 @Injectable()
 export class UsageService {
@@ -21,16 +29,19 @@ export class UsageService {
   async assertCanUseLlm(userId: string): Promise<void> {
     const today = await this.usage.todayTotal(userId);
     if (today.inputTokens + today.outputTokens >= this.limits.dailyTokenQuota) {
-      throw new LimitError('QUOTA_EXCEEDED');
+      throw new LimitError('QUOTA_EXCEEDED', secondsUntilUtcMidnight(new Date()));
     }
-    if (!(await this.rateLimiter.tryHit(`llm:${userId}`, this.limits.questionsPerMinute))) {
-      throw new LimitError('RATE_LIMITED');
-    }
+    await this.assertWithinRate(`llm:${userId}`, this.limits.questionsPerMinute);
   }
 
   async assertCanTryLogin(email: string): Promise<void> {
-    if (!(await this.rateLimiter.tryHit(`login:${email}`, this.limits.loginAttemptsPerMinute))) {
-      throw new LimitError('RATE_LIMITED');
+    await this.assertWithinRate(`login:${email}`, this.limits.loginAttemptsPerMinute);
+  }
+
+  private async assertWithinRate(key: string, limit: number): Promise<void> {
+    const hit = await this.rateLimiter.tryHit(key, limit);
+    if (!hit.allowed) {
+      throw new LimitError('RATE_LIMITED', hit.retryAfterSeconds);
     }
   }
 

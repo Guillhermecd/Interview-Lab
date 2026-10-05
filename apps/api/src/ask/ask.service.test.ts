@@ -147,6 +147,7 @@ describe('AskService', () => {
       explanation: 'O Sul tem mais pedidos.',
       visualization: { type: 'bar', xColumn: 'regiao', yColumn: 'pedidos' },
       attempts: 1,
+      cached: false,
       usage: { inputTokens: 200, outputTokens: 40, calls: 2 },
     });
     expect(queries.executed).toEqual(['SELECT regiao, pedidos FROM x']);
@@ -479,6 +480,7 @@ describe('AskService review mode', () => {
       await expect(service.ask(QUESTION)).resolves.toMatchObject({
         status: 'answered',
         sql: 'SELECT cached',
+        cached: true,
       });
       expect(provider.requests).toHaveLength(0);
       expect(queries.executed).toEqual(['SELECT cached']);
@@ -500,6 +502,7 @@ describe('AskService review mode', () => {
       await expect(service.ask(QUESTION)).resolves.toMatchObject({
         status: 'answered',
         sql: 'SELECT fresh',
+        cached: false,
       });
       expect(queries.executed).toEqual(['DELETE FROM regions', 'SELECT fresh']);
       expect(provider.requests).toHaveLength(1);
