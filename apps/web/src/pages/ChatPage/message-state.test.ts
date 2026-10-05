@@ -27,7 +27,10 @@ function result(rowCount: number): QueryResult {
 }
 
 const SQL_EVENT: AnswerEvent = { event: 'sql', data: { sql: SQL, attempt: 1 } };
-const REVIEW_EVENT: AnswerEvent = { event: 'review', data: { messageId: '7', sql: SQL } };
+const REVIEW_EVENT: AnswerEvent = {
+  event: 'review',
+  data: { messageId: '7', sql: SQL, tables: [] },
+};
 const TOKEN_EVENT: AnswerEvent = { event: 'token', data: { text: 'Cinco.' } };
 const DONE_EVENT: AnswerEvent = {
   event: 'done',

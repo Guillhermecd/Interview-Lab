@@ -5,9 +5,11 @@ import {
   cancelReview,
   editReviewDraft,
   itemsFromMessages,
+  lastTablesUsed,
   newAnswer,
   reopenReview,
   startReviewExecution,
+  type ChatItem,
 } from './chat-state';
 
 const STARTED_AT = '2026-10-05T12:00:00.000Z';
@@ -150,7 +152,7 @@ describe('review mode state', () => {
   function pendingAnswer() {
     return applyAnswerEvent(newAnswer('local-1', STARTED_AT), {
       event: 'review',
-      data: { messageId: '7', sql: REVIEW_SQL },
+      data: { messageId: '7', sql: REVIEW_SQL, tables: ['regions'] },
     });
   }
 
@@ -230,5 +232,72 @@ describe('review mode state', () => {
       generatedSql: REVIEW_SQL,
       sqlAttempts: [`${REVIEW_SQL} LIMIT 1`],
     });
+  });
+});
+
+describe('tables an answer was based on', () => {
+  const DONE = {
+    messageId: '9',
+    status: 'answered' as const,
+    attempts: 1,
+    usage: { inputTokens: 1, outputTokens: 1, calls: 2 },
+  };
+
+  it('come with the SQL to review and are replaced by the ones of the SQL that ran', () => {
+    const pending = applyAnswerEvent(newAnswer('local-1', STARTED_AT), {
+      event: 'review',
+      data: { messageId: '9', sql: 'SELECT name FROM regions', tables: ['regions'] },
+    });
+    expect(pending.tables).toEqual(['regions']);
+
+    const done = applyAnswerEvent(startReviewExecution(pending, 'SELECT id FROM orders'), {
+      event: 'done',
+      data: { ...DONE, edited: true, tables: ['orders'] },
+    });
+    expect(done.tables).toEqual(['orders']);
+  });
+
+  it('are absent when the server sent none', () => {
+    const done = applyAnswerEvent(newAnswer('local-1', STARTED_AT), {
+      event: 'done',
+      data: { ...DONE, status: 'not_answerable' },
+    });
+
+    expect(done).not.toHaveProperty('tables');
+  });
+
+  it('are read from the history', () => {
+    const items = itemsFromMessages([
+      { id: '1', role: 'user', content: 'Pedidos por região?', createdAt: STARTED_AT },
+      {
+        id: '2',
+        role: 'assistant',
+        content: 'Cinco regiões.',
+        status: 'answered',
+        sql: 'SELECT 1',
+        tables: ['orders', 'regions'],
+        createdAt: STARTED_AT,
+      },
+    ]);
+
+    expect(items[1]).toMatchObject({ tables: ['orders', 'regions'] });
+    expect(items[0]).not.toHaveProperty('tables');
+  });
+
+  it('the last query of the conversation is the one the schema panel marks', () => {
+    const answered = (id: string, tables?: string[]): ChatItem => ({
+      ...newAnswer(id, STARTED_AT),
+      status: 'answered',
+      ...(tables && { tables }),
+    });
+
+    expect(lastTablesUsed([])).toEqual([]);
+    expect(lastTablesUsed([answered('a', ['orders']), answered('b', ['regions'])])).toEqual([
+      'regions',
+    ]);
+    // An answer without a query (not answerable, failed) keeps the previous mark.
+    expect(lastTablesUsed([answered('a', ['orders']), answered('b'), answered('c', [])])).toEqual([
+      'orders',
+    ]);
   });
 });

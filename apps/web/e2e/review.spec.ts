@@ -6,7 +6,7 @@ const EDITED_CONDITION = " WHERE name LIKE 'N%'";
 
 const REVIEW: StreamEvent[] = [
   { event: 'sql', data: { sql: GENERATED_SQL, attempt: 1 } },
-  { event: 'review', data: { messageId: '2', sql: GENERATED_SQL } },
+  { event: 'review', data: { messageId: '2', sql: GENERATED_SQL, tables: ['regions'] } },
 ];
 
 const EXECUTION: StreamEvent[] = [

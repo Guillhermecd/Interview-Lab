@@ -5,6 +5,7 @@ import type {
   ConversationMessage,
 } from '@interview-lab/shared';
 import type { Page, Route } from '@playwright/test';
+import { SCHEMA } from '../src/test/schema-fixtures';
 import {
   FILTER_OPTIONS,
   OVERVIEW,
@@ -88,10 +89,12 @@ export async function useFakeBackend(page: Page, options: FakeBackendOptions = {
     json(route, {
       today: { inputTokens: 1200, outputTokens: 300, calls: 4 },
       dailyTokenQuota: 200000,
+      level: 'normal',
       questionsPerMinute: 10,
       byConversation: [],
     }),
   );
+  await page.route('**/api/schema', (route) => json(route, SCHEMA));
   // The dashboard: the same answers whatever the filters, and a record of what
   // was asked, so a test can check the filters reached the API.
   const dashboardRequests: string[] = [];

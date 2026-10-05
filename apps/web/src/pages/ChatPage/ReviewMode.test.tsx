@@ -72,7 +72,7 @@ describe('review mode', () => {
       sseResponse(
         [
           { event: 'sql', data: { sql: GENERATED_SQL, attempt: 1 } },
-          { event: 'review', data: { messageId: '7', sql: GENERATED_SQL } },
+          { event: 'review', data: { messageId: '7', sql: GENERATED_SQL, tables: ['regions'] } },
         ],
         init.signal,
       ),
@@ -96,7 +96,7 @@ describe('review mode', () => {
     api
       .on(`POST ${MESSAGES_URL}`, (init) =>
         sseResponse(
-          [{ event: 'review', data: { messageId: '7', sql: GENERATED_SQL } }],
+          [{ event: 'review', data: { messageId: '7', sql: GENERATED_SQL, tables: ['regions'] } }],
           init.signal,
         ),
       )
@@ -137,7 +137,7 @@ describe('review mode', () => {
     api
       .on(`POST ${MESSAGES_URL}`, (init) =>
         sseResponse(
-          [{ event: 'review', data: { messageId: '7', sql: GENERATED_SQL } }],
+          [{ event: 'review', data: { messageId: '7', sql: GENERATED_SQL, tables: ['regions'] } }],
           init.signal,
         ),
       )
@@ -182,7 +182,7 @@ describe('review mode', () => {
     api
       .on(`POST ${MESSAGES_URL}`, (init) =>
         sseResponse(
-          [{ event: 'review', data: { messageId: '7', sql: GENERATED_SQL } }],
+          [{ event: 'review', data: { messageId: '7', sql: GENERATED_SQL, tables: ['regions'] } }],
           init.signal,
         ),
       )
@@ -235,7 +235,10 @@ describe('review mode', () => {
 
   it('never runs the SQL when the user cancels the review, and lets them review again', async () => {
     api.on(`POST ${MESSAGES_URL}`, (init) =>
-      sseResponse([{ event: 'review', data: { messageId: '7', sql: GENERATED_SQL } }], init.signal),
+      sseResponse(
+        [{ event: 'review', data: { messageId: '7', sql: GENERATED_SQL, tables: ['regions'] } }],
+        init.signal,
+      ),
     );
     const user = await openConversationAndAsk('Quais regiões?', true);
     await screen.findByRole('region', { name: 'Revisão do SQL' });
@@ -350,7 +353,7 @@ describe('leaving while a new conversation is being created', () => {
     await user.click(screen.getByRole('button', { name: CONVERSATION.title ?? '' }));
     releaseCreate?.();
 
-    await screen.findByRole('heading', { name: 'Pergunte em português' });
+    await screen.findByRole('heading', { name: 'O que você quer saber sobre a operação?' });
     const navigation = screen.getByRole('navigation', { name: 'Conversas' });
     expect(
       within(navigation).getByRole('button', { name: CONVERSATION.title ?? '' }),

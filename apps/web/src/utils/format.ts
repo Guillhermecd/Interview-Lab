@@ -111,6 +111,14 @@ export function formatTime(iso: string): string {
   return Number.isNaN(date.getTime()) ? '' : timeFormat.format(date);
 }
 
+const shortDateFormat = new Intl.DateTimeFormat(LOCALE, { day: '2-digit', month: '2-digit' });
+
+// Day and month (dd/mm) of an ISO 8601 instant, in the user's time zone.
+export function formatShortDate(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? '' : shortDateFormat.format(date);
+}
+
 // Countdown: mm:ss, or h:mm:ss from one hour on.
 export function formatCountdown(totalSeconds: number): string {
   const seconds = Math.max(0, Math.floor(totalSeconds));

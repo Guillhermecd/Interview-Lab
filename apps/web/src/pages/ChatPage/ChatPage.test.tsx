@@ -9,6 +9,7 @@ import {
   sseResponse,
   type StreamEvent,
 } from '../../test/fake-api';
+import { SCHEMA } from '../../test/schema-fixtures';
 import { ChatPage } from './ChatPage';
 
 const CONVERSATION: Conversation = {
@@ -56,6 +57,7 @@ const ANSWER: StreamEvent[] = [
 const USAGE = {
   today: { inputTokens: 1200, outputTokens: 300, calls: 4 },
   dailyTokenQuota: 200_000,
+  level: 'normal' as const,
   questionsPerMinute: 10,
   byConversation: [],
 };
@@ -84,7 +86,9 @@ describe('ChatPage', () => {
     render(<ChatPage />);
 
     expect(await screen.findByText('Nenhuma conversa ainda.')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Pergunte em português' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'O que você quer saber sobre a operação?' }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole('button', {
         name: 'Qual foi o faturamento por região no último trimestre?',
@@ -333,6 +337,7 @@ describe('ChatPage', () => {
         jsonResponse({
           ...USAGE,
           today: { inputTokens: 150_000, outputTokens: 50_000, calls: 90 },
+          level: 'critical',
         }),
       )
       .on(`POST ${MESSAGES_URL}`, () =>
@@ -383,5 +388,232 @@ describe('ChatPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Não foi possível falar com o servidor. Verifique sua conexão.',
     );
+  });
+});
+
+describe('ChatPage conversation list', () => {
+  const HOUR_MS = 3_600_000;
+  const OLD = '2025-01-10T12:00:00.000Z';
+
+  function conversation(id: string, title: string, updatedAt: string, extra = {}): Conversation {
+    return { id, title, createdAt: updatedAt, updatedAt, ...extra };
+  }
+
+  it('groups the conversations by period and shows what needs attention', async () => {
+    const now = new Date().toISOString();
+    api.on(`GET ${CONVERSATIONS_URL}`, () =>
+      jsonResponse({
+        items: [
+          conversation('a', 'Estoque crítico', now, { attention: 'pending_review' }),
+          conversation('b', 'Apagar regiões', OLD, { attention: 'blocked' }),
+          conversation('c', 'Conta tudo', OLD, { attention: 'timeout' }),
+          conversation('d', 'Faturamento por região', OLD),
+        ],
+      }),
+    );
+
+    render(<ChatPage />);
+
+    const navigation = screen.getByRole('navigation', { name: 'Conversas' });
+    const today = await within(navigation).findByRole('region', { name: 'Hoje' });
+    expect(within(today).getByRole('button', { name: 'Estoque crítico' })).toBeInTheDocument();
+    expect(today).toHaveTextContent('Aguardando revisão');
+
+    const older = within(navigation).getByRole('region', { name: 'Anteriores' });
+    const items = within(older).getAllByRole('listitem');
+    expect(items.map((item) => within(item).getByRole('button').textContent)).toEqual([
+      'Apagar regiões',
+      'Conta tudo',
+      'Faturamento por região',
+    ]);
+    expect(items[0]).toHaveTextContent('Bloqueada');
+    expect(items[1]).toHaveTextContent('Timeout');
+    // No badge when the server flagged nothing.
+    expect(items[2]).not.toHaveTextContent(/Bloqueada|Timeout|Aguardando/);
+    expect(within(navigation).queryByRole('region', { name: 'Ontem' })).toBeNull();
+  });
+
+  it('filters the list by the title typed in the search', async () => {
+    const earlier = new Date(Date.now() - HOUR_MS).toISOString();
+    api.on(`GET ${CONVERSATIONS_URL}`, () =>
+      jsonResponse({
+        items: [
+          conversation('a', 'Estoque crítico', earlier),
+          conversation('d', 'Faturamento por região', OLD),
+        ],
+      }),
+    );
+    const user = userEvent.setup();
+    render(<ChatPage />);
+    const navigation = screen.getByRole('navigation', { name: 'Conversas' });
+    await within(navigation).findByRole('button', { name: 'Estoque crítico' });
+
+    await user.type(screen.getByRole('searchbox', { name: 'Buscar conversa' }), 'regiao');
+
+    expect(
+      within(navigation)
+        .getAllByRole('button')
+        .map((item) => item.textContent),
+    ).toEqual(['Faturamento por região']);
+
+    await user.type(screen.getByRole('searchbox', { name: 'Buscar conversa' }), ' xyz');
+
+    expect(within(navigation).queryByRole('button')).toBeNull();
+    expect(within(navigation).getByText('Nenhuma conversa com esse título.')).toBeInTheDocument();
+  });
+});
+
+describe('ChatPage header', () => {
+  it('names the conversation open, or a new one', async () => {
+    api
+      .on(`GET ${CONVERSATIONS_URL}`, () => jsonResponse({ items: [CONVERSATION] }))
+      .on(`GET ${MESSAGES_URL}`, () => jsonResponse({ items: [] }));
+    const user = userEvent.setup();
+    render(<ChatPage />);
+    const main = screen.getByRole('main');
+
+    expect(within(main).getByRole('heading', { name: 'Nova conversa' })).toBeInTheDocument();
+
+    await user.click(await screen.findByRole('button', { name: CONVERSATION.title ?? '' }));
+
+    expect(
+      within(main).getByRole('heading', { name: CONVERSATION.title ?? '' }),
+    ).toBeInTheDocument();
+  });
+
+  it.each([
+    ['normal', 'bg-accent'],
+    ['attention', 'bg-warn'],
+    ['critical', 'bg-crit'],
+  ])('paints the token meter by the %s level the server sent', async (level, color) => {
+    api
+      .on(`GET ${CONVERSATIONS_URL}`, () => jsonResponse({ items: [] }))
+      // Low usage on purpose: the color must come from the level, not from a
+      // comparison made on screen.
+      .on('GET /api/usage', () => jsonResponse({ ...USAGE, level }));
+
+    render(<ChatPage />);
+
+    const meter = await screen.findByRole('meter', { name: 'Tokens usados hoje' });
+    expect(meter).toHaveAttribute('aria-valuenow', '1500');
+    expect(meter).toHaveAttribute('aria-valuemax', '200000');
+    expect(meter.firstElementChild).toHaveClass(color);
+    expect(screen.getByRole('main')).toHaveTextContent('1.500 / 200.000');
+  });
+
+  it('shows no meter when the usage could not be loaded', async () => {
+    api.on(`GET ${CONVERSATIONS_URL}`, () => jsonResponse({ items: [] }));
+
+    render(<ChatPage />);
+    await screen.findByText('Nenhuma conversa ainda.');
+
+    expect(screen.queryByRole('meter')).toBeNull();
+  });
+});
+
+describe('ChatPage schema panel', () => {
+  const ANSWER_ON_REGIONS: StreamEvent[] = ANSWER.map((item) =>
+    item.event === 'done' ? { ...item, data: { ...item.data, tables: ['regions'] } } : item,
+  );
+
+  function stubSchema() {
+    return api
+      .on(`GET ${CONVERSATIONS_URL}`, () => jsonResponse({ items: [CONVERSATION] }))
+      .on(`GET ${MESSAGES_URL}`, () => jsonResponse({ items: [] }))
+      .on('GET /api/schema', () => jsonResponse(SCHEMA));
+  }
+
+  it('stays closed on a narrow screen and opens on request', async () => {
+    stubSchema();
+    const user = userEvent.setup();
+    render(<ChatPage />);
+    const toggle = screen.getByRole('button', { name: 'Schema' });
+
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByRole('complementary', { name: 'Schema' })).toBeNull();
+    expect(api.calls.some((call) => call.key === 'GET /api/schema')).toBe(false);
+
+    await user.click(toggle);
+
+    const panel = screen.getByRole('complementary', { name: 'Schema' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(await within(panel).findByText('customers')).toBeInTheDocument();
+    expect(within(panel).getAllByRole('group')).toHaveLength(SCHEMA.tables.length);
+
+    await user.click(toggle);
+
+    expect(screen.queryByRole('complementary', { name: 'Schema' })).toBeNull();
+  });
+
+  it('starts open when the screen is wide enough', async () => {
+    stubSchema();
+    vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query) => ({ matches: query === '(min-width: 1200px)', media: query }) as MediaQueryList,
+    );
+
+    render(<ChatPage />);
+
+    const panel = screen.getByRole('complementary', { name: 'Schema' });
+    expect(await within(panel).findByText('orders')).toBeInTheDocument();
+    vi.restoreAllMocks();
+  });
+
+  it('lists columns with their types and keys', async () => {
+    stubSchema();
+    const user = userEvent.setup();
+    render(<ChatPage />);
+    await user.click(screen.getByRole('button', { name: 'Schema' }));
+    const panel = screen.getByRole('complementary', { name: 'Schema' });
+
+    await user.click(await within(panel).findByText('orders'));
+
+    const columns = within(within(panel).getAllByRole('group')[1] as HTMLElement).getAllByRole(
+      'listitem',
+    );
+    expect(columns.map((column) => column.textContent)).toEqual([
+      'idPKbigint',
+      'customer_idFKbigint',
+      'delivered_attimestamp with time zone',
+    ]);
+    expect(within(columns[1] as HTMLElement).getByText('FK')).toHaveAttribute(
+      'title',
+      'Chave estrangeira para customers.id',
+    );
+  });
+
+  it('marks the tables the last answer read, as the server reported', async () => {
+    stubSchema().on(`POST ${MESSAGES_URL}`, (init) => sseResponse(ANSWER_ON_REGIONS, init.signal));
+    const user = userEvent.setup();
+    render(<ChatPage />);
+    await user.click(screen.getByRole('button', { name: 'Schema' }));
+    const panel = screen.getByRole('complementary', { name: 'Schema' });
+    await within(panel).findByText('regions');
+    expect(within(panel).queryByRole('img', { name: 'Usada na última consulta' })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: CONVERSATION.title ?? '' }));
+    await askQuestion('Quais são as regiões?');
+    await screen.findByText('O Sul tem mais pedidos.');
+
+    const tables = within(panel).getAllByRole('group');
+    const marked = tables.filter(
+      (table) => within(table).queryByRole('img', { name: 'Usada na última consulta' }) !== null,
+    );
+    expect(marked).toHaveLength(1);
+    expect(marked[0]).toHaveTextContent('regions');
+  });
+
+  it('shows the failure to load the schema', async () => {
+    api
+      .on(`GET ${CONVERSATIONS_URL}`, () => jsonResponse({ items: [] }))
+      .on('GET /api/schema', () =>
+        jsonResponse({ code: 'INTERNAL_ERROR', message: 'Ocorreu um erro interno.' }, 500),
+      );
+    const user = userEvent.setup();
+    render(<ChatPage />);
+
+    await user.click(screen.getByRole('button', { name: 'Schema' }));
+
+    const panel = screen.getByRole('complementary', { name: 'Schema' });
+    expect(await within(panel).findByRole('alert')).toHaveTextContent('Ocorreu um erro interno.');
   });
 });

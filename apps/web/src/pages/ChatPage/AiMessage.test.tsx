@@ -26,6 +26,7 @@ const EMPTY_RESULT: QueryResult = { ...RESULT, rows: [], rowCount: 0 };
 const USAGE: UsageSummary = {
   today: { inputTokens: 150_000, outputTokens: 50_000, calls: 90 },
   dailyTokenQuota: 200_000,
+  level: 'normal' as const,
   questionsPerMinute: 10,
   byConversation: [],
 };
