@@ -173,6 +173,52 @@ test('opens a past conversation and continues it', async ({ page }) => {
   expect(backend.questions).toEqual(['E o estoque?']);
 });
 
+test('shows the schema beside the conversation and marks the tables an answer read', async ({
+  page,
+}) => {
+  const answer = REVENUE_BY_REGION.map((item) =>
+    item.event === 'done'
+      ? { ...item, data: { ...item.data, tables: ['regions', 'customers', 'orders'] } }
+      : item,
+  );
+  await useFakeBackend(page, {
+    conversations: [
+      {
+        id: '00000000-0000-4000-8000-0000000000bb',
+        title: 'Apague as regiões',
+        createdAt: '2026-10-02T10:00:00.000Z',
+        updatedAt: '2026-10-02T10:00:00.000Z',
+        attention: 'blocked',
+      },
+    ],
+    answers: [answer],
+  });
+  await page.goto('/chat');
+
+  // What the server flagged about a conversation shows in the list.
+  const conversations = page.getByRole('navigation', { name: 'Conversas' });
+  await expect(conversations.getByRole('listitem')).toContainText('Bloqueada');
+
+  // Wide screen: the schema starts open.
+  const schema = page.getByRole('complementary', { name: 'Schema' });
+  await expect(schema.getByText('customers')).toBeVisible();
+  await expect(schema.getByRole('img', { name: 'Usada na última consulta' })).toHaveCount(0);
+
+  await schema.getByText('orders').click();
+  await expect(schema.getByText('delivered_at')).toBeVisible();
+  await expect(schema.getByText('timestamp with time zone')).toBeVisible();
+
+  await page.getByLabel('Pergunta').fill('Qual foi o faturamento por região?');
+  await page.getByRole('button', { name: 'Enviar' }).click();
+  await expect(page.getByText('O Centro-Oeste liderou o faturamento no trimestre.')).toBeVisible();
+
+  // The three tables of the fixture were all read by the answer.
+  await expect(schema.getByRole('img', { name: 'Usada na última consulta' })).toHaveCount(3);
+
+  await page.getByRole('button', { name: 'Schema' }).click();
+  await expect(schema).toBeHidden();
+});
+
 test('switches between light and dark theme', async ({ page }) => {
   await useFakeBackend(page);
   await page.goto('/chat');

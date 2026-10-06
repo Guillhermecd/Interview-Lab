@@ -66,8 +66,7 @@ export function QuestionForm({
               maxLength={MAX_QUESTION_LENGTH}
               disabled={blocked}
               placeholder={
-                blockedReason ??
-                'Pergunte sobre os dados de vendas, ex.: qual o faturamento por região no último trimestre?'
+                blockedReason ?? 'Pergunte sobre faturamento, estoque, pedidos, clientes…'
               }
               className="block w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-sm placeholder:text-text-3 focus:outline-none disabled:cursor-not-allowed"
             />

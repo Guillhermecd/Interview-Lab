@@ -76,6 +76,8 @@ function readSystemName(value: unknown, owner: string): string | undefined {
 // Walks the whole parse tree and rejects anything that is not explicitly
 // allowed. It never inspects the SQL text, only the tree built by the parser.
 export class AstValidator {
+  // The exposed tables the query reads (never CTE names), filled while walking.
+  readonly tables = new Set<string>();
   private joinCount = 0;
   private depth = 0;
 
@@ -261,7 +263,11 @@ export class AstValidator {
 
     const isCteReference = schemaname === undefined && scope.has(relname);
     const schemaAllowed = schemaname === undefined || schemaname === EXPOSED_SCHEMA;
-    if (isCteReference || (schemaAllowed && EXPOSED_TABLES.has(relname))) {
+    if (isCteReference) {
+      return;
+    }
+    if (schemaAllowed && EXPOSED_TABLES.has(relname)) {
+      this.tables.add(relname);
       return;
     }
 

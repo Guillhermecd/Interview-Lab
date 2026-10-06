@@ -11,6 +11,7 @@ import { QueryExecutor } from './query-executor.service.js';
 import { QUERY_ENV, READONLY_POOL, SQL_GUARD } from './query.tokens.js';
 import { createReadonlyPool } from './readonly-pool.js';
 import { SchemaCatalog } from './schema-catalog.service.js';
+import { SchemaController } from './schema.controller.js';
 
 @Module({})
 export class QueryModule implements OnModuleDestroy {
@@ -21,7 +22,9 @@ export class QueryModule implements OnModuleDestroy {
       module: QueryModule,
       // Global so the health check can use DatabaseHealth without re-registering the pool.
       global: true,
-      controllers: env.query.internalEndpointEnabled ? [QueryController] : [],
+      controllers: env.query.internalEndpointEnabled
+        ? [SchemaController, QueryController]
+        : [SchemaController],
       providers: [
         { provide: READONLY_POOL, useFactory: () => createReadonlyPool(env.database) },
         { provide: QUERY_ENV, useValue: env.query },

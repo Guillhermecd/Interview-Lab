@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
+import type { SchemaOverview } from '@interview-lab/shared';
 import type { Pool } from 'pg';
 import { EXPOSED_SCHEMA, EXPOSED_TABLES } from '../sql-guard/allowlists.js';
 import { READONLY_POOL } from './query.tokens.js';
@@ -50,6 +51,32 @@ const CONSTRAINTS_SQL = `
   WHERE n.nspname = $1 AND c.relname = ANY ($2) AND con.contype IN ('p', 'f', 'c')
   ORDER BY c.relname, con.contype DESC, con.conname`;
 
+// Columns of primary keys and of foreign keys, with what each foreign key
+// points to. A key over several columns gives one row per column.
+const KEYS_SQL = `
+  SELECT c.relname AS table_name,
+         a.attname AS column_name,
+         con.contype AS kind,
+         ref.relname AS referenced_table,
+         ref_column.attname AS referenced_column
+  FROM pg_constraint con
+  JOIN pg_class c ON c.oid = con.conrelid
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  CROSS JOIN LATERAL unnest(con.conkey) WITH ORDINALITY AS key (attnum, position)
+  JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = key.attnum
+  LEFT JOIN pg_class ref ON ref.oid = con.confrelid
+  LEFT JOIN pg_attribute ref_column
+    ON ref_column.attrelid = con.confrelid AND ref_column.attnum = con.confkey[key.position]
+  WHERE n.nspname = $1 AND c.relname = ANY ($2) AND con.contype IN ('p', 'f')`;
+
+interface KeyRow {
+  table_name: string;
+  column_name: string;
+  kind: 'p' | 'f';
+  referenced_table: string | null;
+  referenced_column: string | null;
+}
+
 interface ColumnRow {
   table_name: string;
   column_name: string;
@@ -69,6 +96,7 @@ interface ConstraintRow {
 @Injectable()
 export class SchemaCatalog {
   private description: Promise<SchemaDescription> | undefined;
+  private displayed: Promise<SchemaOverview> | undefined;
 
   constructor(@Inject(READONLY_POOL) private readonly pool: Pool) {}
 
@@ -80,6 +108,55 @@ export class SchemaCatalog {
       throw error;
     });
     return this.description;
+  }
+
+  // The same tables, shaped for the schema panel of the chat: each column with
+  // its type and whether it is a primary key or points to another table.
+  overview(): Promise<SchemaOverview> {
+    this.displayed ??= this.loadOverview().catch((error: unknown) => {
+      this.displayed = undefined;
+      throw error;
+    });
+    return this.displayed;
+  }
+
+  private async loadOverview(): Promise<SchemaOverview> {
+    const [description, keys] = await Promise.all([
+      this.describe(),
+      this.pool.query<KeyRow>(KEYS_SQL, [EXPOSED_SCHEMA, [...EXPOSED_TABLES]]),
+    ]);
+    const keysOf = (table: string, column: string) =>
+      keys.rows.filter((key) => key.table_name === table && key.column_name === column);
+
+    return {
+      tables: description.tables.map((table) => ({
+        name: table.name,
+        columns: table.columns.map((column) => {
+          const columnKeys = keysOf(table.name, column.name);
+          const foreign = columnKeys.find(
+            (key) =>
+              key.kind === 'f' &&
+              key.referenced_table !== null &&
+              key.referenced_column !== null &&
+              // A key to a table the AI cannot read is not shown.
+              EXPOSED_TABLES.has(key.referenced_table),
+          );
+          return {
+            name: column.name,
+            type: column.type,
+            nullable: column.nullable,
+            primaryKey: columnKeys.some((key) => key.kind === 'p'),
+            ...(foreign?.referenced_table != null &&
+              foreign.referenced_column != null && {
+                references: {
+                  table: foreign.referenced_table,
+                  column: foreign.referenced_column,
+                },
+              }),
+          };
+        }),
+      })),
+    };
   }
 
   private async load(): Promise<SchemaDescription> {

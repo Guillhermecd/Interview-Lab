@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type {
   AssistantMessageStatus,
   Conversation,
+  ConversationAttention,
   ConversationMessage,
   MessageRole,
   TokenUsage,
@@ -25,6 +26,8 @@ export interface AssistantMessageInput {
   rowCount?: number;
   attempts?: number;
   usage?: TokenUsage;
+  // The stable code of the failure, for messages with status "error".
+  errorCode?: string;
 }
 
 export interface ReviewedAnswerInput {
@@ -49,6 +52,27 @@ interface ConversationRow {
   title: string | null;
   created_at: Date;
   updated_at: Date;
+  // Of the last assistant message; absent when the row comes from an INSERT.
+  last_status?: AssistantMessageStatus | null;
+  last_error_code?: string | null;
+}
+
+// Failures of the last answer that the list points out (D-41).
+const BLOCKED_CODES: ReadonlySet<string> = new Set(['QUERY_REJECTED', 'QUERY_NOT_ALLOWED']);
+const TIMEOUT_CODE = 'QUERY_TIMEOUT';
+
+// Whether the last answer of the conversation needs the user's attention.
+function attentionOf(row: ConversationRow): ConversationAttention | undefined {
+  if (row.last_status === 'pending_review') {
+    return 'pending_review';
+  }
+  if (row.last_status !== 'error' || row.last_error_code == null) {
+    return undefined;
+  }
+  if (BLOCKED_CODES.has(row.last_error_code)) {
+    return 'blocked';
+  }
+  return row.last_error_code === TIMEOUT_CODE ? 'timeout' : undefined;
 }
 
 interface MessageRow {
@@ -81,11 +105,13 @@ const MESSAGE_COLUMNS =
   'id, role, content, status, sql, visualization, row_count, generated_sql, edited, created_at';
 
 function toConversation(row: ConversationRow): Conversation {
+  const attention = attentionOf(row);
   return {
     id: row.id,
     title: row.title,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
+    ...(attention !== undefined && { attention }),
   };
 }
 
@@ -126,8 +152,15 @@ export class ConversationRepository {
 
   async list(ownerId: string): Promise<Conversation[]> {
     const result = await this.pool.query<ConversationRow>(
-      `SELECT ${CONVERSATION_COLUMNS} FROM app.conversations
-       WHERE owner_id = $1 ORDER BY updated_at DESC LIMIT $2`,
+      `SELECT c.id, c.title, c.created_at, c.updated_at,
+              last.status AS last_status, last.error_code AS last_error_code
+       FROM app.conversations c
+       LEFT JOIN LATERAL (
+         SELECT m.status, m.error_code FROM app.messages m
+         WHERE m.conversation_id = c.id AND m.role = 'assistant'
+         ORDER BY m.id DESC LIMIT 1
+       ) last ON true
+       WHERE c.owner_id = $1 ORDER BY c.updated_at DESC LIMIT $2`,
       [ownerId, MAX_LISTED_CONVERSATIONS],
     );
     return result.rows.map(toConversation);
@@ -281,8 +314,8 @@ export class ConversationRepository {
     const result = await this.pool.query<MessageRow>(
       `INSERT INTO app.messages
          (conversation_id, role, content, status, sql, visualization, row_count, attempts,
-          input_tokens, output_tokens)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          input_tokens, output_tokens, error_code)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING ${MESSAGE_COLUMNS}`,
       [
         conversationId,
@@ -295,6 +328,7 @@ export class ConversationRepository {
         input.attempts ?? null,
         input.usage?.inputTokens ?? null,
         input.usage?.outputTokens ?? null,
+        input.errorCode ?? null,
       ],
     );
     const row = result.rows[0];

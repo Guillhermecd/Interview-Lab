@@ -11,6 +11,7 @@ const UNAUTHORIZED = { code: 'UNAUTHORIZED', message: 'Autenticação necessári
 const USAGE = {
   today: { inputTokens: 1200, outputTokens: 300, calls: 4 },
   dailyTokenQuota: 200_000,
+  level: 'normal' as const,
   questionsPerMinute: 10,
   byConversation: [],
 };
@@ -89,10 +90,10 @@ describe('App session', () => {
 
     renderApp('/chat');
 
-    const sidebar = await screen.findByRole('complementary');
-    expect(
-      await within(sidebar).findByText('Uso hoje: 1.500 de 200.000 tokens'),
-    ).toBeInTheDocument();
+    const meter = await screen.findByRole('meter', { name: 'Tokens usados hoje' });
+    expect(meter).toHaveAttribute('aria-valuenow', '1500');
+    expect(meter).toHaveAttribute('aria-valuemax', '200000');
+    expect(screen.getByRole('main')).toHaveTextContent('1.500 / 200.000');
     expect(
       within(screen.getByRole('banner')).getByRole('link', { name: 'Converse com seus dados' }),
     ).toHaveAttribute('aria-current', 'page');
@@ -106,7 +107,7 @@ describe('App session', () => {
 
     await user.click(screen.getByRole('link', { name: 'Converse com seus dados' }));
     expect(
-      await screen.findByRole('heading', { name: 'Pergunte em português' }),
+      await screen.findByRole('heading', { name: 'O que você quer saber sobre a operação?' }),
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole('link', { name: 'Dashboard' }));
@@ -177,7 +178,7 @@ describe('App session', () => {
     await user.click(screen.getByRole('button', { name: 'Entrar' }));
 
     expect(
-      await screen.findByRole('heading', { name: 'Pergunte em português' }),
+      await screen.findByRole('heading', { name: 'O que você quer saber sobre a operação?' }),
     ).toBeInTheDocument();
     expect(api.calls.find((call) => call.key === 'POST /api/auth/login')?.body).toEqual({
       email: 'ana@example.com',
@@ -253,7 +254,7 @@ describe('App session', () => {
     api.on('POST /api/conversations', () => jsonResponse(UNAUTHORIZED, 401));
     const user = userEvent.setup();
     renderApp();
-    await screen.findByRole('heading', { name: 'Pergunte em português' });
+    await screen.findByRole('heading', { name: 'O que você quer saber sobre a operação?' });
 
     await user.type(screen.getByLabelText('Pergunta'), 'Quantas regiões?');
     await user.click(screen.getByRole('button', { name: 'Enviar' }));

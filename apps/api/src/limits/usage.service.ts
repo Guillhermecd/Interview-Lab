@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { TokenUsage, UsageSummary } from '@interview-lab/shared';
+import type { TokenUsage, UsageLevel, UsageSummary } from '@interview-lab/shared';
 import type { LimitsEnv } from '../config/security-env.js';
 import { LimitError } from './limit-error.js';
 import { RateLimiter } from './rate-limiter.js';
@@ -8,6 +8,17 @@ import { UsageRepository, type UsageKind } from './usage.repository.js';
 export const LIMITS_ENV = Symbol('LIMITS_ENV');
 
 const MILLISECONDS_PER_SECOND = 1000;
+// Share of the daily quota from which the usage meter changes color.
+const ATTENTION_FROM = 0.75;
+const CRITICAL_FROM = 0.9;
+
+export function usageLevel(tokens: number, quota: number): UsageLevel {
+  const share = tokens / quota;
+  if (share >= CRITICAL_FROM) {
+    return 'critical';
+  }
+  return share >= ATTENTION_FROM ? 'attention' : 'normal';
+}
 
 // The daily quota is counted per UTC day, so it resets at the next UTC midnight.
 function secondsUntilUtcMidnight(now: Date): number {
@@ -61,6 +72,7 @@ export class UsageService {
     ]);
     return {
       today,
+      level: usageLevel(today.inputTokens + today.outputTokens, this.limits.dailyTokenQuota),
       dailyTokenQuota: this.limits.dailyTokenQuota,
       questionsPerMinute: this.limits.questionsPerMinute,
       byConversation,

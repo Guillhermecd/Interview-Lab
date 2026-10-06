@@ -62,6 +62,8 @@ export interface AnswerItem {
   // Sent by the server when the answer ends.
   usage?: TokenUsage;
   cached?: boolean;
+  // Tables the SQL reads, as the server extracted them from the query.
+  tables?: string[];
 }
 
 export type ChatItem = QuestionItem | AnswerItem;
@@ -127,6 +129,7 @@ export function applyAnswerEvent(answer: AnswerItem, event: AnswerEvent): Answer
         messageId: event.data.messageId,
         status: 'pending_review',
         reviewSql: event.data.sql,
+        tables: event.data.tables,
         // The review event carries the SQL to approve; it is the last attempt.
         sqlAttempts:
           answer.sqlAttempts.at(-1) === event.data.sql
@@ -143,6 +146,7 @@ export function applyAnswerEvent(answer: AnswerItem, event: AnswerEvent): Answer
         executingReview: false,
         usage: event.data.usage,
         ...(event.data.cached !== undefined && { cached: event.data.cached }),
+        ...(event.data.tables !== undefined && { tables: event.data.tables }),
         ...(event.data.edited !== undefined && { edited: event.data.edited }),
         ...(event.data.edited === true &&
           answer.reviewSql !== undefined && { generatedSql: answer.reviewSql }),
@@ -189,10 +193,25 @@ function fromAssistantMessage(message: ConversationMessage): AnswerItem {
   if (message.generatedSql !== undefined) {
     item.generatedSql = message.generatedSql;
   }
+  if (message.tables !== undefined) {
+    item.tables = message.tables;
+  }
   if (message.status === 'pending_review' && message.sql !== undefined) {
     item.reviewSql = message.sql;
   }
   return item;
+}
+
+// The tables read by the last query of the conversation, for the schema panel.
+// Answers without SQL (not answerable, failed before generating) are skipped.
+export function lastTablesUsed(items: ChatItem[]): string[] {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index];
+    if (item?.kind === 'answer' && item.tables !== undefined && item.tables.length > 0) {
+      return item.tables;
+    }
+  }
+  return [];
 }
 
 export function itemsFromMessages(messages: ConversationMessage[]): ChatItem[] {

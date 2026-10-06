@@ -33,7 +33,9 @@ function serviceWith(findPendingReview: () => Promise<PendingReview | undefined>
     streamReviewedExecution: vi.fn(),
   };
   const usage = { record: vi.fn(() => Promise.resolve()) };
-  return new ConversationService(repository, askService, new ScriptedLlmProvider([]), usage);
+  return new ConversationService(repository, askService, new ScriptedLlmProvider([]), usage, {
+    tablesOf: () => [],
+  });
 }
 
 describe('ConversationService.claimPendingReview', () => {

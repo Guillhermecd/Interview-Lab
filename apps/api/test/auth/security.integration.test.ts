@@ -477,6 +477,8 @@ describe('security over HTTP', () => {
 
       expect(response.json<UsageSummary>()).toEqual({
         today: { inputTokens: 200, outputTokens: 40, calls: 2 },
+        // 240 of 5,000 tokens: far from the quota.
+        level: 'normal',
         dailyTokenQuota: 5000,
         questionsPerMinute: 7,
         byConversation: [

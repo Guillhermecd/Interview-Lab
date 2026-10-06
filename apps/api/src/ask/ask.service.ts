@@ -54,6 +54,8 @@ export interface SqlForReview {
   // Checked against the real columns only when the SQL runs.
   proposedVisualization: ProposedVisualization;
   attempts: number;
+  // Tables the SQL reads.
+  tables: string[];
   usage: TokenUsage;
 }
 
@@ -164,7 +166,7 @@ export class AskService {
     @Inject(LLM_PROVIDER) private readonly provider: LlmProvider,
     @Inject(SchemaCatalog) private readonly schemaCatalog: Pick<SchemaCatalog, 'describe'>,
     @Inject(GuardedQueryService)
-    private readonly queries: Pick<GuardedQueryService, 'run' | 'check'>,
+    private readonly queries: Pick<GuardedQueryService, 'run' | 'check' | 'tablesOf'>,
     @Inject(ASK_LIMITS) private readonly limits: AskLimits,
     @Inject(ANSWER_CACHE) private readonly cache: AnswerCache,
   ) {}
@@ -215,6 +217,7 @@ export class AskService {
       sql: generated.sql,
       proposedVisualization: generated.proposedVisualization,
       attempts: generated.attempts,
+      tables: this.queries.tablesOf(generated.sql),
       usage: llm.usage,
     };
   }
@@ -414,6 +417,7 @@ export class AskService {
       explanation: explanation.trim(),
       visualization,
       attempts,
+      tables: this.queries.tablesOf(sql),
       cached,
       usage: llm.usage,
     };

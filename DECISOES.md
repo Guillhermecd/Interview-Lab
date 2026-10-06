@@ -520,3 +520,24 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Data:** 2026-10-05
 - **Motivo:** o dashboard tem uma cor por categoria e cinco cores; uma sexta categoria repetiria a cor da primeira.
 - **Custo aceito:** criar uma categoria nova exige mudança no código (e nas cores) depois.
+
+### D-60 — O que o backend informa para a tela do chat em três colunas (Fase 09b)
+- **Contexto:** o handoff pede três coisas que a D-41 não cobria: marcar no painel de schema as tabelas usadas pela resposta, colorir o medidor "Tokens hoje" conforme o consumo, e um rodapé "Fora do escopo da IA" no painel.
+- **Opções:** (1) tabelas usadas: extraídas pelo backend | deduzidas na tela a partir do texto do SQL. (2) cor do medidor: nível enviado pelo backend | comparação feita na tela. (3) rodapé "Fora do escopo da IA": mostrar | omitir.
+- **Status:** DECIDIDA (os três itens abaixo, aprovados antes de começar a fase)
+- **Escolha:**
+  1. O backend extrai as tabelas da árvore sintática que a guarda SQL já monta e as envia nos eventos `review` e `done` e em cada mensagem do histórico (`tables`). Nomes de CTE não entram.
+  2. `GET /api/usage` passa a trazer o nível de consumo (`level`: `normal`, `attention` ou `critical`); a tela só escolhe a cor.
+  3. O rodapé "Fora do escopo da IA" fica fora da tela.
+- **Data:** 2026-10-05
+- **Motivo:** (1) e (2) seguem a fronteira do template: a tela não interpreta SQL nem decide limiar.
+
+### D-61 — Limiares do nível de consumo e coluna `error_code` (Fase 09b)
+- **Contexto:** dois pontos da implementação da 09b que **não** foram perguntados antes e já estão no código. Ficam como proposta até a revisão do Guilherme.
+- **Status:** PROPOSTA — aplicada na 09b, aguardando revisão do Guilherme
+- **Proposta:**
+  1. **Limiares do nível de consumo:** `attention` a partir de 75% da cota diária e `critical` a partir de 90%. São constantes no código (`apps/api/src/limits/usage.service.ts`).
+  2. **Coluna `app.messages.error_code`** (migration `1790899200008`), preenchida só em respostas com erro. É uma mudança de schema. Sem ela a lista de conversas não distingue "bloqueada" de "timeout" (item 4 da D-41), porque o histórico guardava apenas o texto do erro.
+- **Opções para o item 2:** manter a coluna | deduzir o tipo do erro pelo texto guardado (quebra se o texto mudar) | não distinguir bloqueada de timeout na lista.
+- **Regra do aviso na lista (`attention`):** vale a última resposta da conversa. `pending_review` quando ela aguarda revisão; `blocked` quando terminou em `QUERY_REJECTED`; `timeout` quando terminou em `QUERY_TIMEOUT`. Outras falhas não geram aviso.
+- **Data:** 2026-10-05
