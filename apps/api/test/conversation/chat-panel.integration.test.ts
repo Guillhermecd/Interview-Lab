@@ -33,9 +33,10 @@ describe('chat panel data', () => {
   async function startApp(
     provider = new ScriptedLlmProvider([]),
     query: { statementTimeoutMs?: number; appTimeoutMs?: number } = {},
+    limits: { sqlCacheTtlSeconds?: number; resultCacheTtlSeconds?: number } = {},
   ): Promise<NestFastifyApplication> {
     const moduleRef = await Test.createTestingModule({
-      imports: [AppModule.register(database.appEnv(query))],
+      imports: [AppModule.register(database.appEnv(query, { limits }))],
     })
       .overrideProvider(LLM_PROVIDER)
       .useValue(provider)
@@ -178,6 +179,59 @@ describe('chat panel data', () => {
       expect(history.items[1]?.tables).toEqual(tables);
       // The question has no SQL, and so no tables.
       expect(history.items[0]).not.toHaveProperty('tables');
+    });
+
+    it('come with an answer whose SQL was reused from the cache', async () => {
+      const question = 'Quantos centros de distribuição existem?';
+      // One SQL generation only: the second question reuses it. The cache is
+      // off in the other tests, and turned on here.
+      const app = await startApp(
+        new ScriptedLlmProvider(
+          [sqlAnswer('SELECT count(*) AS total FROM distribution_centers')],
+          ['Nove.', 'Nove.'],
+        ),
+        {},
+        { sqlCacheTtlSeconds: 3600, resultCacheTtlSeconds: 300 },
+      );
+      await ask(app, (await createConversation(app)).id, question);
+
+      const events = await ask(app, (await createConversation(app)).id, question);
+
+      expect(events.at(-1)).toMatchObject({
+        event: 'done',
+        data: { cached: true, tables: ['distribution_centers'] },
+      });
+    });
+
+    it('are the ones of the SQL that ran when the user edited it in review', async () => {
+      const app = await startApp(
+        new ScriptedLlmProvider([sqlAnswer('SELECT name FROM regions')], ['Vinte mil.']),
+      );
+      const conversation = await createConversation(app);
+      const review = (
+        await ask(app, conversation.id, 'Liste as regiões para eu revisar', 'review')
+      ).at(-1);
+      expect(review).toMatchObject({ event: 'review', data: { tables: ['regions'] } });
+      const { messageId } = review?.data as { messageId: string };
+
+      const executed = parseSseBody(
+        (
+          await app.inject({
+            method: 'POST',
+            url: `/api/conversations/${conversation.id}/messages/${messageId}/execute`,
+            payload: { sql: 'SELECT count(*) AS total FROM orders' },
+          })
+        ).body,
+      );
+
+      expect(executed.at(-1)).toMatchObject({
+        event: 'done',
+        data: { edited: true, tables: ['orders'] },
+      });
+      const history = (
+        await app.inject({ method: 'GET', url: `/api/conversations/${conversation.id}/messages` })
+      ).json<MessageList>();
+      expect(history.items[1]?.tables).toEqual(['orders']);
     });
   });
 
