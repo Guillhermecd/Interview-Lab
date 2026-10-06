@@ -91,7 +91,7 @@ necessárias.
 | 09a | Design: tokens, tema, componentes e chat reestilizado | Concluída |
 | 09c | Design: dashboard operacional | Concluída |
 | 09e | Cadastro de materiais e movimentações de estoque | Concluída |
-| 09b | Design: tela do chat em três colunas e painel de schema | Pendente |
+| 09b | Design: tela do chat em três colunas e painel de schema | Concluída |
 | 09d | Design: chat suspenso no dashboard | Pendente |
 | 10 | Observabilidade, hardening, deploy e README | Pendente |
 
@@ -155,9 +155,11 @@ pela tela e rode:
 pnpm --filter @interview-lab/api db:promote-admin voce@exemplo.com
 ```
 
-O **chat** (`/chat`) mostra: lista de conversas, pergunta em português, resposta em streaming com o SQL
-gerado, gráfico (barra ou linha, quando faz sentido), tabela de resultado e explicação;
-consumo de tokens do dia; tema claro e escuro. Configure a chave do Gemini e um
+O **chat** (`/chat`) tem três colunas: a lista de conversas (busca por título, grupos por data
+e o aviso de conversa aguardando revisão, bloqueada ou com timeout); a conversa, com pergunta em
+português, resposta em streaming com o SQL gerado, gráfico (quando faz sentido), tabela de
+resultado e explicação, e no cabeçalho o consumo de tokens do dia; e o painel de schema, que
+lista as tabelas que a IA pode ler e marca as usadas na última resposta. Tema claro e escuro. Configure a chave do Gemini e um
 `JWT_SECRET` com 32+ caracteres no `.env`.
 
 A API expõe:
@@ -167,7 +169,8 @@ A API expõe:
 | `GET /api/health` | `200 {"status":"ok"}` quando a aplicação e o banco respondem; `503` caso contrário |
 | `POST /api/auth/register` · `POST /api/auth/login` | Cria conta / entra; a sessão vai num cookie `HttpOnly` |
 | `POST /api/auth/logout` · `GET /api/auth/me` | Sai (apaga o cookie) / usuário atual |
-| `GET /api/usage` | Tokens gastos hoje, no total e por conversa, e os limites |
+| `GET /api/usage` | Tokens gastos hoje, no total e por conversa, os limites e o nível de consumo (`normal`, `attention`, `critical`) |
+| `GET /api/schema` | Tabelas que a IA pode ler, com colunas, tipos, chaves primárias e estrangeiras |
 | `GET /api/dashboard/filters` | Centros de distribuição, regiões e categorias para os filtros |
 | `GET /api/dashboard/overview` | Indicadores e gráficos de um período (`period`: `7d`, `30d`, `month`, `quarter`, `year` ou `custom` com `from` e `to`), comparados ao período anterior |
 | `GET /api/dashboard/stock-alerts` | Materiais abaixo ou perto do estoque mínimo, agora (`status`, `limit`) |
