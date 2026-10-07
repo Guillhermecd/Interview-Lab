@@ -6,4 +6,6 @@ export const CATALOG_PATH = '/cadastro';
 export interface ChatLocationState {
   // Written in the composer, for the user to review and send.
   question?: string;
+  // The conversation to open: the one the floating window was showing.
+  conversationId?: string;
 }

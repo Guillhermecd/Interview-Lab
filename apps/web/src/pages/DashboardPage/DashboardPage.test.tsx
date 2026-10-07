@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   FILTER_OPTIONS,
@@ -8,6 +8,7 @@ import {
   STOCK_ALERTS,
   stubDashboard,
 } from '../../test/dashboard-fixtures';
+import { FloatingChatProvider, useFloatingChat } from '../../hooks/useFloatingChat';
 import { FakeApi, jsonResponse } from '../../test/fake-api';
 import { DashboardPage } from './DashboardPage';
 
@@ -22,19 +23,25 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-// Stands for the chat: shows what the dashboard handed over.
+// Stands for the floating chat: shows what the dashboard handed over.
 function ChatStub() {
-  const state = useLocation().state as { question?: string } | null;
-  return <p>Chat: {state?.question}</p>;
+  const { status, prompt } = useFloatingChat();
+  return status === 'open' ? (
+    <p>
+      Chat: {prompt?.question} [{prompt?.context}]
+    </p>
+  ) : null;
 }
 
 function renderDashboard() {
   return render(
     <MemoryRouter initialEntries={['/dashboard']}>
-      <Routes>
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/chat" element={<ChatStub />} />
-      </Routes>
+      <FloatingChatProvider>
+        <Routes>
+          <Route path="/dashboard" element={<DashboardPage />} />
+        </Routes>
+        <ChatStub />
+      </FloatingChatProvider>
     </MemoryRouter>,
   );
 }
@@ -267,7 +274,7 @@ describe('DashboardPage', () => {
     expect(requests('overview')).toHaveLength(1);
   });
 
-  it('takes a question about a card to the chat, with the context', async () => {
+  it('takes a question about a card to the floating chat, with the context', async () => {
     const user = userEvent.setup();
     renderDashboard();
     await screen.findByRole('region', { name: 'Indicadores' });
@@ -278,9 +285,11 @@ describe('DashboardPage', () => {
 
     expect(
       await screen.findByText(
-        'Chat: Por que o faturamento mudou em relação ao período anterior? (Contexto: Faturamento do período · 01/09/2026 – 30/09/2026)',
+        'Chat: Por que o faturamento mudou em relação ao período anterior? [Faturamento do período · 01/09/2026 – 30/09/2026]',
       ),
     ).toBeInTheDocument();
+    // The dashboard stays where it is.
+    expect(screen.getByRole('region', { name: 'Indicadores' })).toBeInTheDocument();
   });
 
   it('shows the error when the overview cannot be loaded, keeping the tables', async () => {

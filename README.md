@@ -93,7 +93,7 @@ necessárias.
 | 09e | Cadastro de materiais e movimentações de estoque | Concluída |
 | 09b | Design: tela do chat em três colunas e painel de schema | Concluída |
 | 09f | Ocultar valores em reais | Concluída |
-| 09d | Design: chat suspenso no dashboard | Pendente |
+| 09d | Design: chat suspenso no dashboard | Concluída |
 | 10 | Observabilidade, hardening, deploy e README | Pendente |
 
 Entregas e critérios de verificação de cada fase estão em [PLANO.md](PLANO.md).
@@ -144,8 +144,14 @@ O web (http://localhost:5173) começa pela tela de login/cadastro e abre no
 **dashboard** (`/dashboard`): filtros de período, centro de distribuição, região e
 categoria; seis indicadores comparados com o período anterior; faturamento no tempo e
 por região, top 10 materiais, estoque por centro e curva ABC; alertas de ruptura e
-últimas movimentações. Todo número é calculado pela API (regras na D-57). O botão
-"Perguntar" de cada card leva ao chat com a pergunta escrita.
+últimas movimentações. Todo número é calculado pela API (regras na D-57).
+
+O **chat suspenso** fica sobre o dashboard e o cadastro: o botão "Converse com seus
+dados", no canto inferior direito, abre uma janela com a mesma conversa do `/chat`
+(SQL, revisão, tabela, gráfico e explicação). O botão "Perguntar" de cada card abre a
+janela com o contexto e a pergunta escritos, para você enviar. "Tela cheia" leva a
+conversa para o `/chat`; minimizar guarda tudo; fechar encerra a conversa na janela
+(ela continua salva e aparece na lista do `/chat`). Decisões na D-63.
 
 O **cadastro** (`/cadastro`) aparece só para administradores: materiais (criar, editar,
 arquivar, restaurar, estoque mínimo por centro) e lançamento de movimentações de

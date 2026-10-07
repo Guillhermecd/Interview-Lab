@@ -166,6 +166,10 @@ export const CalendarIcon = createIcon(
 
 export const ChevronDownIcon = createIcon(<path d="M4 6l4 4 4-4" />);
 
+export const MaximizeIcon = createIcon(
+  <path d="M9.5 2.5h4v4M13.5 2.5L9 7M6.5 13.5h-4v-4M2.5 13.5L7 9" />,
+);
+
 // The mark of Rota Materiais: a route between two points.
 export const RouteIcon = createIcon(
   <>

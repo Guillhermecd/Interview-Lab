@@ -4,28 +4,17 @@ import { ErrorMessage } from '../../components/ui/ErrorMessage';
 import { DatabaseIcon, MessageSquareIcon } from '../../components/ui/icons';
 import { Spinner } from '../../components/ui/Spinner';
 import { useReviewPreference } from '../../hooks/useReviewPreference';
-import { formatTime } from '../../utils/format';
-import { AiMessage } from './AiMessage';
-import { lastTablesUsed, type ChatItem } from './chat-state';
+import { lastTablesUsed } from './chat-state';
 import { ConversationSidebar } from './ConversationSidebar';
+import { MessageList } from './MessageList';
 import { QuestionForm } from './QuestionForm';
 import { SchemaPanel } from './SchemaPanel';
+import { SUGGESTIONS } from './suggestions';
 import { TokenMeter } from './TokenMeter';
 import { useChat } from './useChat';
 import { useConversationList } from './useConversationList';
 import { useQuotaBlock } from './useQuotaBlock';
 import { useUsage } from './useUsage';
-
-// Starting points shown on an empty conversation. The tag only says what the
-// question is about.
-const SUGGESTIONS = [
-  { tag: 'Vendas', question: 'Qual foi o faturamento por região no último trimestre?' },
-  { tag: 'Produtos', question: 'Quais são os 5 produtos mais vendidos?' },
-  { tag: 'Estoque', question: 'Quais materiais estão abaixo do estoque mínimo?' },
-  { tag: 'Pedidos', question: 'Como evoluiu o número de pedidos por mês?' },
-  { tag: 'Entregas', question: 'Qual centro de distribuição tem mais entregas atrasadas?' },
-  { tag: 'Clientes', question: 'Quais clientes mais compraram neste ano?' },
-];
 
 const NEW_CONVERSATION_TITLE = 'Nova conversa';
 const UNTITLED_CONVERSATION = 'Conversa sem título';
@@ -36,20 +25,16 @@ interface ChatPageProps {
   // A question brought from another screen: written in the composer for the
   // user to review and send, never sent by itself.
   initialQuestion?: string | undefined;
+  // A conversation to open at once: the one the floating window was showing.
+  initialConversationId?: string | undefined;
 }
 
-// The question an answer replies to: the item right before it.
-function questionBefore(items: ChatItem[], index: number): string | undefined {
-  const previous = items[index - 1];
-  return previous?.kind === 'question' ? previous.text : undefined;
-}
-
-export function ChatPage({ initialQuestion }: ChatPageProps) {
+export function ChatPage({ initialQuestion, initialConversationId }: ChatPageProps) {
   const { review, setReview } = useReviewPreference();
   const conversationList = useConversationList();
   const usage = useUsage();
   const { refresh: refreshUsage } = usage;
-  const [selectedId, setSelectedId] = useState<string>();
+  const [selectedId, setSelectedId] = useState(initialConversationId);
   const { refresh } = conversationList;
 
   const handleCreated = useCallback((conversationId: string) => {
@@ -155,44 +140,7 @@ export function ChatPage({ initialQuestion }: ChatPageProps) {
               </section>
             )}
 
-            {chat.items.map((item, index) => {
-              if (item.kind === 'question') {
-                return (
-                  <div
-                    key={item.id}
-                    className="ml-auto flex w-fit max-w-[85%] flex-col items-end gap-1"
-                  >
-                    <span className="text-xs text-text-3">Você · {formatTime(item.time)}</span>
-                    <p className="rounded-[12px_12px_3px_12px] bg-surface-3 px-3.5 py-2.5 text-sm whitespace-pre-wrap">
-                      {item.text}
-                    </p>
-                  </div>
-                );
-              }
-              const question = questionBefore(chat.items, index);
-              return (
-                <AiMessage
-                  key={item.id}
-                  answer={item}
-                  isBusy={chat.isAnswering}
-                  usage={usage.usage}
-                  onExecuteReview={(answerId, messageId, sql) => {
-                    void chat.executeReview(answerId, messageId, sql);
-                  }}
-                  onEditReview={chat.editReview}
-                  onCancelReview={chat.cancelReview}
-                  onReopenReview={chat.reopenReview}
-                  onStop={chat.cancel}
-                  onRetry={
-                    question === undefined || chat.isAnswering
-                      ? undefined
-                      : () => {
-                          ask(question);
-                        }
-                  }
-                />
-              );
-            })}
+            <MessageList chat={chat} usage={usage.usage} onAsk={ask} />
             <div ref={endRef} />
           </div>
         </div>

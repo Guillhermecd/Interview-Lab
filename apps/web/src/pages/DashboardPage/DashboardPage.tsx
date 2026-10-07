@@ -7,7 +7,6 @@ import {
   type StockMovementType,
 } from '@interview-lab/shared';
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   DashboardService,
   type DashboardFilters,
@@ -18,8 +17,8 @@ import { ErrorMessage } from '../../components/ui/ErrorMessage';
 import { MessageSquareIcon } from '../../components/ui/icons';
 import { Spinner } from '../../components/ui/Spinner';
 import { useApiData } from '../../hooks/useApiData';
+import { useFloatingChat } from '../../hooks/useFloatingChat';
 import { useMoney } from '../../hooks/useMoneyVisibility';
-import { CHAT_PATH, type ChatLocationState } from '../../routes';
 import { formatDateTime, formatDay, formatDecimal, formatInteger } from '../../utils/format';
 import { RegionBars, StockByCenterBars, TopProductsList } from './bars';
 import { AbcChart, RevenueChart, type RevenueMode } from './charts';
@@ -56,7 +55,7 @@ const REVENUE_MODES: { value: RevenueMode; label: string }[] = [
 // attention, for the period and filters chosen. It shows what the server
 // computed; nothing here adds up or classifies business data.
 export function DashboardPage() {
-  const navigate = useNavigate();
+  const { openWith: ask } = useFloatingChat();
   const money = useMoney();
   const [choice, setChoice] = useState<DashboardPeriodChoice>({ period: 'month' });
   const [filters, setFilters] = useState<DashboardFilters>({});
@@ -85,13 +84,6 @@ export function DashboardPage() {
 
   function changePeriod(next: Exclude<DashboardPeriod, 'custom'> | DashboardRange) {
     setChoice(typeof next === 'string' ? { period: next } : { period: 'custom', custom: next });
-  }
-
-  // Takes the user to the chat with the question written, for them to send
-  // (the floating chat of Phase 09d replaces this).
-  function ask(label: string, question: string) {
-    const state: ChatLocationState = { question: `${question} (Contexto: ${label})` };
-    void navigate(CHAT_PATH, { state });
   }
 
   return (
