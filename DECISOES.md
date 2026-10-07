@@ -558,3 +558,23 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
   - O eixo vertical do gráfico de faturamento também é ocultado (`•••`), porque seus rótulos são valores em reais.
   - O botão é um botão de alternância (`aria-pressed`) com o nome fixo "Ocultar valores em reais".
 - **Limites aceitos:** ocultar é só na tela — a API continua enviando os números ao navegador, então não é controle de acesso. O comprimento das barras, a linha do gráfico e as minilinhas dos indicadores continuam mostrando a proporção entre os valores. O formulário de material mostra preço e custo ao editar.
+
+### D-63 — Chat suspenso: tela cheia, olho e onde a janela existe (Fase 09d)
+- **Contexto:** três pontos da janela suspensa que o handoff e as decisões anteriores não fechavam. Perguntados antes de começar a fase.
+- **Opções:** (1) "Tela cheia": abre a mesma conversa no `/chat` | só navega para o `/chat`. (2) olho que oculta valores: a janela não obedece, como o `/chat` | esconder a janela inteira. (3) onde a janela existe: só no dashboard | dashboard e Cadastro.
+- **Status:** DECIDIDA
+- **Escolha:**
+  1. **"Tela cheia" abre a mesma conversa no `/chat`**, com o histórico. A navegação leva o id da conversa; o contrato da API não muda.
+  2. **A janela não obedece ao olho**, como o `/chat` (D-62): as colunas de um resultado são genéricas e a tela não sabe qual é dinheiro.
+  3. **Dashboard e Cadastro.** A janela e a conversa se mantêm ao trocar entre as duas telas. Vai além do handoff, que a mostra só no dashboard.
+- **Data:** 2026-10-07
+- **Motivo:** continuidade da conversa entre a janela e a tela cheia; um único comportamento do chat diante do olho; o Cadastro é onde o administrador lança o que depois quer consultar.
+- **Consequência do item 3:** o estado da janela fica acima das telas (`FloatingChatProvider`), não dentro do dashboard.
+- **Detalhes de implementação (escolhidos pelo Claude, para revisão):**
+  - **Fechar encerra a conversa na janela.** Ao abrir de novo, ela começa vazia; a conversa continua salva e aparece na lista do `/chat`. Minimizar guarda tudo (mensagens e o que foi digitado). É o que dá à janela um jeito de começar uma conversa nova.
+  - **"Perguntar" com a janela já aberta continua a mesma conversa:** só o chip e o texto do composer são trocados.
+  - **"Tela cheia" fica desabilitado enquanto uma resposta está sendo escrita:** sair da janela interrompe a resposta.
+  - **Ir para o `/chat` pela barra superior fecha a janela** (e encerra a conversa nela, como o Fechar).
+  - **Remover o chip envia só a pergunta.** Com o chip, o texto enviado é `<pergunta> (Contexto: <contexto>)`, o mesmo formato usado desde a 09c (D-42).
+  - **Introdução da janela vazia:** título "Pergunte sobre o que está na tela" e as 4 primeiras sugestões do `/chat`.
+  - **No Cadastro não há cards com "Perguntar":** a janela abre só pelo botão flutuante.

@@ -25,7 +25,7 @@ tabela/gráfico + explicação, em streaming.
 | 09e | Cadastro de materiais e movimentações de estoque | D-56, D-58, D-59 | CONCLUÍDA |
 | 09b | Design: tela do chat em três colunas e painel de schema | D-41, D-60, D-61 | CONCLUÍDA |
 | 09f | Ocultar valores em reais | D-62 | CONCLUÍDA |
-| 09d | Design: chat suspenso no dashboard | D-42 | PENDENTE |
+| 09d | Design: chat suspenso no dashboard | D-42, D-63 | CONCLUÍDA |
 | 10 | Observabilidade, hardening, deploy e README | D-11 | PENDENTE |
 
 A ordem acima é uma proposta (ver D-10). A Fase 09 entrou em 2026-10-05 (D-38); a ordem
@@ -187,6 +187,8 @@ lembrar a escolha, Cadastro); E2E com recarga da página.
 **Entregas**
 - Botão flutuante e janela suspensa (420 × 680), com tela cheia, minimizar e fechar.
 - "Perguntar sobre isto" abre a janela com o chip de contexto e a pergunta preenchida (D-42).
+- A janela existe no dashboard e no Cadastro, e a conversa se mantém ao trocar entre os dois;
+  "Tela cheia" abre a mesma conversa no `/chat` (D-63).
 
 **Verificação:** testes de componentes e E2E do fluxo dashboard → pergunta → resposta.
 

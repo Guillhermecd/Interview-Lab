@@ -22,7 +22,7 @@ export function CatalogPage() {
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto flex max-w-[1200px] flex-col gap-4 px-6 pt-[18px] pb-16">
+      <div className="mx-auto flex max-w-[1200px] flex-col gap-4 px-6 pt-[18px] pb-24">
         <div>
           <h1 className="text-xl font-semibold tracking-[-0.015em]">Cadastro</h1>
           <p className="mt-[3px] text-[12.5px] text-text-3">

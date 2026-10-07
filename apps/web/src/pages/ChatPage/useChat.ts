@@ -14,7 +14,7 @@ import {
   type ChatItem,
 } from './chat-state';
 
-interface ChatState {
+export interface ChatState {
   items: ChatItem[];
   isLoadingHistory: boolean;
   historyError: string | undefined;
