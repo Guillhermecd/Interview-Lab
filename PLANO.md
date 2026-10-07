@@ -24,7 +24,7 @@ tabela/gráfico + explicação, em streaming.
 | 09c | Design: dashboard operacional | D-40, D-43, D-48, D-50 a D-55, D-57 | CONCLUÍDA |
 | 09e | Cadastro de materiais e movimentações de estoque | D-56, D-58, D-59 | CONCLUÍDA |
 | 09b | Design: tela do chat em três colunas e painel de schema | D-41, D-60, D-61 | CONCLUÍDA |
-| 09f | Ocultar valores em reais | D-62 | EM REVISÃO |
+| 09f | Ocultar valores em reais | D-62 | CONCLUÍDA |
 | 09d | Design: chat suspenso no dashboard | D-42 | PENDENTE |
 | 10 | Observabilidade, hardening, deploy e README | D-11 | PENDENTE |
 

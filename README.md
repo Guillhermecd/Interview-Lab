@@ -92,7 +92,7 @@ necessárias.
 | 09c | Design: dashboard operacional | Concluída |
 | 09e | Cadastro de materiais e movimentações de estoque | Concluída |
 | 09b | Design: tela do chat em três colunas e painel de schema | Concluída |
-| 09f | Ocultar valores em reais | Em revisão |
+| 09f | Ocultar valores em reais | Concluída |
 | 09d | Design: chat suspenso no dashboard | Pendente |
 | 10 | Observabilidade, hardening, deploy e README | Pendente |
 
