@@ -39,6 +39,7 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Motivo:** Anthropic e OpenAI não têm uso gratuito de API; o Gemini tem camada gratuita para os modelos Flash. A interface permite trocar de provedor depois escrevendo uma única classe.
 - **Modelo:** a primeira escolha foi `gemini-3.8-flash` (faixa "equilibrada"), mas a camada gratuita dele permite só 20 requisições por dia, e cada pergunta usa 2 a 3. Trocado para `gemini-3.5-flash-lite`, que passou na avaliação manual da Fase 04.
 - **Ponto de atenção:** na camada gratuita o Google usa os dados enviados para melhorar seus produtos. Hoje são perguntas, o schema e linhas dos dados de demonstração. Rever antes de usar dados reais ou publicar (Fase 10).
+- **Revisão para a demo pública (2026-10-07, D-64):** a demo continua na camada gratuita, com um aviso visível na tela de entrada e no chat de que as perguntas são enviadas ao Google. Custo aceito: não há teto de gasto a configurar e a demo pode parar por cota de requisições do provedor.
 
 ### D-04 — Parser SQL
 - **Opções:** `node-sql-parser` | `pgsql-ast-parser` | `libpg-query` (parser real do Postgres)
@@ -117,7 +118,10 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 
 ### D-11 — Deploy
 - **Opções:** AWS Lightsail | VPS com Docker + Traefik | outro
-- **Status:** PENDENTE (decidir só na Fase 10)
+- **Status:** DECIDIDA
+- **Escolha:** AWS Lightsail, com `docker compose` e Nginx (plano da Fase 10, sub-fase 10c). O detalhe — Postgres no mesmo host em vez de banco gerenciado — é a D-69, registrada no início da 10c.
+- **Data:** 2026-10-07
+- **Motivo:** custo e simplicidade para uma demo.
 
 ### D-12 — Política de branches e PR
 - **Proposta:** `feature/fase-XX-nome`, Conventional Commits, squash merge, CI obrigatório, merge feito pelo Guilherme.
@@ -578,3 +582,18 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
   - **Remover o chip envia só a pergunta.** Com o chip, o texto enviado é `<pergunta> (Contexto: <contexto>)`, o mesmo formato usado desde a 09c (D-42).
   - **Introdução da janela vazia:** título "Pergunte sobre o que está na tela" e as 4 primeiras sugestões do `/chat`.
   - **No Cadastro não há cards com "Perguntar":** a janela abre só pelo botão flutuante.
+
+### D-64 — Divisão da Fase 10, congelamento de features e preparação do plano
+- **Contexto:** em 2026-10-07 o Guilherme trouxe o `PLANO-fase-10.md`, que divide a antiga Fase 10 em seis sub-fases. O plano foi escrito sobre um estado anterior do repositório: tratava a 09d como adiada, não conhecia a 09f e usava números de decisão (D-59 a D-68) já ocupados.
+- **Status:** DECIDIDA
+- **Escolha:**
+  1. **Fase 10 em seis sub-fases**, na ordem de execução: 10a (limites de recurso), 10b (ajustes de segurança), 10c (deploy e demo pública), 10d (avaliação da LLM), 10e (observabilidade), 10f (README). Cada uma é uma branch, um PR e um relatório.
+  2. **Congelamento de features novas até a 10c estar concluída**, para priorizar a demo pública. A 09d e a 09f, concluídas antes, não entram: a 09d foi mergeada (PR #15) em vez de adiada.
+  3. **O plano fica em arquivo próprio**, `PLANO-fase-10.md`, corrigido; o `PLANO.md` aponta para ele.
+  4. **Decisões do plano renumeradas** de D-59…D-68 para D-64…D-73. Cada uma é registrada aqui no início da sub-fase em que se aplica.
+  5. **10b, permissão por coluna:** `sales.customers` não tem dado pessoal hoje. Uma migration cria `email` e `phone`, o seed as preenche, e o `GRANT` por coluna as deixa fora do alcance de `app_readonly`.
+  6. **LLM na demo pública:** camada gratuita do Gemini, com aviso visível (ver a revisão da D-03).
+- **Data:** 2026-10-07
+- **Motivo:** (2) o trabalho da 09d estava pronto e verificado, e deixá-lo numa branch durante 10a–10c traria conflito de merge; (5) aplicar a permissão por coluna em `responsible_name` e `document`, que já existem, quebraria o dashboard e o Cadastro, que leem essas colunas pelo mesmo pool (D-54); (6) custo zero.
+- **Outras correções feitas no plano**, por já existirem no código: o pool dedicado de `app_readonly` (Fase 02), a exclusão de `repeat`, `lpad`, `rpad` e `format` da allowlist (Fase 03), a leitura do schema pelo catálogo do banco (Fase 09b) e o limite de login por e-mail (Fase 08).
+- **Em aberto, a decidir no início da 10a:** o dashboard e as leituras do Cadastro dividem o pool somente leitura com o chat; se o chat o saturar, essas telas param.

@@ -11,8 +11,8 @@ tabela ou gráfico acompanhada de uma explicação, em streaming.
 > conversas com resposta em streaming, histórico e memória resumida (Fase 05), a
 > interface de chat (Fase 06), a revisão/edição do SQL antes de executar (Fase 07) e
 > autenticação, limites de uso e cache (Fase 08). Observabilidade e deploy ainda estão
-> **planejados**. Este README será expandido na Fase 10 com
-> arquitetura detalhada e GIF de demonstração.
+> **planejados** ([PLANO-fase-10.md](PLANO-fase-10.md)). Este README será expandido na
+> Fase 10f com arquitetura detalhada e GIF de demonstração.
 
 ## Como vai funcionar
 
@@ -94,7 +94,12 @@ necessárias.
 | 09b | Design: tela do chat em três colunas e painel de schema | Concluída |
 | 09f | Ocultar valores em reais | Concluída |
 | 09d | Design: chat suspenso no dashboard | Concluída |
-| 10 | Observabilidade, hardening, deploy e README | Pendente |
+| 10a | Limites de recurso no executor | Pendente |
+| 10b | Ajustes de segurança | Pendente |
+| 10c | Deploy e demo pública | Pendente |
+| 10d | Avaliação automatizada da LLM | Pendente |
+| 10e | Observabilidade | Pendente |
+| 10f | README e apresentação | Pendente |
 
 Entregas e critérios de verificação de cada fase estão em [PLANO.md](PLANO.md).
 
