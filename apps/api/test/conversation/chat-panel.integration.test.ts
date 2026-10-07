@@ -32,7 +32,7 @@ describe('chat panel data', () => {
 
   async function startApp(
     provider = new ScriptedLlmProvider([]),
-    query: { statementTimeoutMs?: number; appTimeoutMs?: number } = {},
+    query: { statementTimeoutMs?: number; appTimeoutMs?: number; maxCost?: number } = {},
     limits: { sqlCacheTtlSeconds?: number; resultCacheTtlSeconds?: number } = {},
   ): Promise<NestFastifyApplication> {
     const moduleRef = await Test.createTestingModule({
@@ -275,10 +275,16 @@ describe('chat panel data', () => {
 
     it('flags a conversation whose last query ran out of time', async () => {
       const app = await startApp(
+        // Since Phase 10a a query like this is refused for its estimated cost
+        // before running (and a join with no condition whatever the limit).
+        // To reach the timeout, the joins have conditions and the test raises
+        // the cost limit.
         new ScriptedLlmProvider([
-          sqlAnswer('SELECT count(*) FROM orders a, orders b, orders c, orders d'),
+          sqlAnswer(
+            'SELECT count(*) FROM orders a JOIN orders b ON a.id <> b.id JOIN orders c ON b.id <> c.id',
+          ),
         ]),
-        { statementTimeoutMs: 100, appTimeoutMs: 400 },
+        { statementTimeoutMs: 100, appTimeoutMs: 400, maxCost: 1_000_000_000_000_000 },
       );
       const conversation = await createConversation(app);
 

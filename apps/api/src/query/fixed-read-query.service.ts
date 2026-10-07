@@ -2,9 +2,9 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Pool, PoolClient, QueryResultRow } from 'pg';
 import type { QueryEnv } from '../config/env.js';
 import { describeErrorForLog, QueryExecutionError, translateDatabaseError } from './query-error.js';
-import { QUERY_ENV, READONLY_POOL } from './query.tokens.js';
+import { QUERY_ENV, FIXED_READ_POOL } from './query.tokens.js';
 
-// Runs statements WRITTEN IN THIS CODEBASE on the read-only pool, with their
+// Runs statements WRITTEN IN THIS CODEBASE on their own read-only pool, with their
 // values passed as parameters (D-54). It exists for screens that read `sales`
 // with fixed SQL, such as the dashboard.
 //
@@ -17,7 +17,7 @@ export class FixedReadQuery {
   private readonly logger = new Logger(FixedReadQuery.name);
 
   constructor(
-    @Inject(READONLY_POOL) private readonly pool: Pool,
+    @Inject(FIXED_READ_POOL) private readonly pool: Pool,
     @Inject(QUERY_ENV) private readonly limits: QueryEnv,
   ) {}
 

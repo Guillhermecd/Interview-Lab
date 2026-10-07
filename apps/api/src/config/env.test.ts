@@ -20,7 +20,8 @@ describe('loadEnv', () => {
         port: 5432,
         name: 'interview_lab',
         readonlyPassword: 'readonly-secret',
-        poolMax: 10,
+        poolMax: 5,
+        fixedReadPoolMax: 5,
       },
       appDatabase: {
         host: 'localhost',
@@ -40,6 +41,7 @@ describe('loadEnv', () => {
         maxRows: 1000,
         statementTimeoutMs: 5000,
         appTimeoutMs: 7000,
+        maxCost: 500_000,
         internalEndpointEnabled: false,
       },
       llm: {
@@ -59,6 +61,7 @@ describe('loadEnv', () => {
         questionsPerMinute: 10,
         dailyTokenQuota: 200_000,
         loginAttemptsPerMinute: 5,
+        maxInflightPerUser: 1,
         sqlCacheTtlSeconds: 3600,
         resultCacheTtlSeconds: 300,
       },
@@ -102,7 +105,10 @@ describe('loadEnv', () => {
       PORT: '8080',
       DB_PORT: '5433',
       DB_POOL_MAX: '4',
+      READONLY_POOL_MAX: '2',
+      FIXED_READ_POOL_MAX: '3',
       QUERY_MAX_ROWS: '50',
+      QUERY_MAX_COST: '9000',
       QUERY_STATEMENT_TIMEOUT_MS: '1000',
       QUERY_APP_TIMEOUT_MS: '2000',
       INTERNAL_QUERY_ENDPOINT_ENABLED: 'true',
@@ -110,11 +116,16 @@ describe('loadEnv', () => {
 
     expect(env.port).toBe(8080);
     expect(env.database.port).toBe(5433);
-    expect(env.database.poolMax).toBe(4);
+    // Each pool has its own size: the application's, the one for SQL from the
+    // chat, and the one for statements written in the code.
+    expect(env.appDatabase.poolMax).toBe(4);
+    expect(env.database.poolMax).toBe(2);
+    expect(env.database.fixedReadPoolMax).toBe(3);
     expect(env.query).toEqual({
       maxRows: 50,
       statementTimeoutMs: 1000,
       appTimeoutMs: 2000,
+      maxCost: 9000,
       internalEndpointEnabled: true,
     });
   });
@@ -135,6 +146,13 @@ describe('loadEnv', () => {
     ['QUERY_MAX_ROWS', '10001'],
     ['QUERY_STATEMENT_TIMEOUT_MS', '50'],
     ['DB_POOL_MAX', '0'],
+    ['READONLY_POOL_MAX', '0'],
+    ['READONLY_POOL_MAX', '101'],
+    ['FIXED_READ_POOL_MAX', '0'],
+    ['QUERY_MAX_COST', '0'],
+    ['QUERY_MAX_COST', 'alto'],
+    ['EXEC_MAX_INFLIGHT_PER_USER', '0'],
+    ['EXEC_MAX_INFLIGHT_PER_USER', '101'],
     ['LLM_TIMEOUT_MS', '10'],
     ['LLM_EXPLAIN_MAX_ROWS', '0'],
     ['INTERNAL_QUERY_ENDPOINT_ENABLED', 'yes'],
@@ -167,6 +185,7 @@ describe('loadEnv security settings', () => {
       RATE_LIMIT_PER_MINUTE: '3',
       DAILY_TOKEN_QUOTA: '1000',
       LOGIN_ATTEMPTS_PER_MINUTE: '2',
+      EXEC_MAX_INFLIGHT_PER_USER: '3',
       SQL_CACHE_TTL_SECONDS: '0',
       RESULT_CACHE_TTL_SECONDS: '60',
     });
@@ -178,6 +197,7 @@ describe('loadEnv security settings', () => {
       questionsPerMinute: 3,
       dailyTokenQuota: 1000,
       loginAttemptsPerMinute: 2,
+      maxInflightPerUser: 3,
       sqlCacheTtlSeconds: 0,
       resultCacheTtlSeconds: 60,
     });

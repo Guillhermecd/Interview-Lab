@@ -23,6 +23,9 @@ const DEFAULT_TEST_QUERY_ENV: QueryEnv = {
   maxRows: 1000,
   statementTimeoutMs: 5000,
   appTimeoutMs: 7000,
+  // The default of the application: the tests run under the real limit. A test
+  // that needs a query to run long raises it.
+  maxCost: 500_000,
   internalEndpointEnabled: false,
 };
 
@@ -30,6 +33,8 @@ const DEFAULT_TEST_LIMITS: LimitsEnv = {
   questionsPerMinute: 1000,
   dailyTokenQuota: 10_000_000,
   loginAttemptsPerMinute: 1000,
+  // Out of the way: the tests about this limit set it.
+  maxInflightPerUser: 100,
   sqlCacheTtlSeconds: 0,
   resultCacheTtlSeconds: 0,
 };
@@ -107,6 +112,7 @@ export async function startTestDatabase(options: { redis?: boolean } = {}): Prom
         name: container.getDatabase(),
         readonlyPassword: READONLY_TEST_PASSWORD,
         poolMax: TEST_POOL_MAX,
+        fixedReadPoolMax: TEST_POOL_MAX,
       },
       appDatabase: {
         host: container.getHost(),

@@ -15,9 +15,15 @@ const PORT_RANGE = { min: MIN_PORT, max: MAX_PORT };
 const DEFAULT_PORT = 3000;
 const DEFAULT_DB_PORT = 5432;
 const DEFAULT_POOL_MAX = 10;
+const DEFAULT_READONLY_POOL_MAX = 5;
+const DEFAULT_FIXED_READ_POOL_MAX = 5;
 const DEFAULT_QUERY_MAX_ROWS = 1000;
 const DEFAULT_STATEMENT_TIMEOUT_MS = 5000;
 const DEFAULT_APP_TIMEOUT_MS = 7000;
+// Calibrated in Phase 10a: ten times the most expensive plan seen in the
+// evaluation questions (docs/relatorios/fase-10a.md).
+const DEFAULT_QUERY_MAX_COST = 500_000;
+const MAX_QUERY_COST = 1_000_000_000_000;
 
 const DEFAULT_LLM_MODEL = 'gemini-3.5-flash-lite';
 const DEFAULT_LLM_TIMEOUT_MS = 30_000;
@@ -44,7 +50,11 @@ export interface DatabaseConnectionEnv {
 // database CLI alone (src/database/database-env.ts).
 export interface ReadonlyDatabaseEnv extends DatabaseConnectionEnv {
   readonlyPassword: string;
+  // Connections for SQL that came from the LLM or from a user.
   poolMax: number;
+  // Connections for statements written in the code (dashboard, registry,
+  // schema, health): a busy chat does not take them (D-65).
+  fixedReadPoolMax: number;
 }
 
 export interface QueryEnv {
@@ -54,6 +64,9 @@ export interface QueryEnv {
   // Enforced by the API for the whole execution; the safety net if the database
   // timeout does not fire.
   appTimeoutMs: number;
+  // The planner's estimated cost above which a query is refused without
+  // running (D-65). A heuristic: the timeouts remain the safety net.
+  maxCost: number;
   internalEndpointEnabled: boolean;
 }
 
@@ -122,6 +135,11 @@ export function loadQueryEnv(source: NodeJS.ProcessEnv): QueryEnv {
       defaultValue: DEFAULT_APP_TIMEOUT_MS,
       ...timeoutRange,
     }),
+    maxCost: parseInteger(source, 'QUERY_MAX_COST', {
+      defaultValue: DEFAULT_QUERY_MAX_COST,
+      min: 1,
+      max: MAX_QUERY_COST,
+    }),
     internalEndpointEnabled: parseBoolean(source, 'INTERNAL_QUERY_ENDPOINT_ENABLED', false),
   };
 
@@ -179,7 +197,16 @@ export function loadEnv(source: NodeJS.ProcessEnv): AppEnv {
     database: {
       ...connection,
       readonlyPassword: requireValue(source, 'DB_READONLY_PASSWORD'),
-      poolMax,
+      poolMax: parseInteger(source, 'READONLY_POOL_MAX', {
+        defaultValue: DEFAULT_READONLY_POOL_MAX,
+        min: 1,
+        max: MAX_POOL_SIZE,
+      }),
+      fixedReadPoolMax: parseInteger(source, 'FIXED_READ_POOL_MAX', {
+        defaultValue: DEFAULT_FIXED_READ_POOL_MAX,
+        min: 1,
+        max: MAX_POOL_SIZE,
+      }),
     },
     appDatabase: {
       ...connection,

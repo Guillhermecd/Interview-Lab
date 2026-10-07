@@ -2,10 +2,12 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { TokenUsage, UsageLevel, UsageSummary } from '@interview-lab/shared';
 import type { LimitsEnv } from '../config/security-env.js';
 import { LimitError } from './limit-error.js';
+import { LIMITS_ENV } from './limits.tokens.js';
 import { RateLimiter } from './rate-limiter.js';
 import { UsageRepository, type UsageKind } from './usage.repository.js';
 
-export const LIMITS_ENV = Symbol('LIMITS_ENV');
+// Kept here for the modules that already import it from this file.
+export { LIMITS_ENV };
 
 const MILLISECONDS_PER_SECOND = 1000;
 // Share of the daily quota from which the usage meter changes color.

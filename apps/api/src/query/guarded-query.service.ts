@@ -22,10 +22,11 @@ export class GuardedQueryService {
     return this.executor.execute(this.validate(sql), signal);
   }
 
-  // Runs only the guard, without executing: used to check SQL that will be
-  // shown to the user for review. Throws the same errors as run().
-  check(sql: string): void {
-    this.validate(sql);
+  // Checks SQL that will be shown to the user for review, without running it:
+  // the guard, and then the estimated cost of the plan. Throws the same errors
+  // as run() would before fetching rows. Returns the estimated cost.
+  async check(sql: string, signal?: AbortSignal): Promise<number> {
+    return this.executor.estimateCost(this.validate(sql), signal);
   }
 
   // The tables a query reads, to show the user what an answer was based on.

@@ -3,6 +3,7 @@ import type { QueryResult } from '@interview-lab/shared';
 import type { Pool, PoolClient, QueryArrayConfig } from 'pg';
 import type { QueryEnv } from '../config/env.js';
 import { columnTypeName } from './column-types.js';
+import { assessPlan } from './plan-cost.js';
 import { describeErrorForLog, QueryExecutionError, translateDatabaseError } from './query-error.js';
 import { QUERY_ENV, READONLY_POOL } from './query.tokens.js';
 
@@ -22,7 +23,6 @@ interface FetchedRows {
 
 interface Session {
   backendPid: number;
-  fetched: FetchedRows;
 }
 
 class AppTimeoutError extends Error {}
@@ -40,7 +40,8 @@ function singleStatement(text: string): SingleStatementQuery {
 
 // Runs SQL that has already been validated. It adds the limits that do not
 // depend on the SQL text: read-only transaction, database and application
-// timeouts, and a cap on returned rows.
+// timeouts, a cap on returned rows, and a refusal of plans estimated as too
+// expensive (D-65).
 @Injectable()
 export class QueryExecutor {
   private readonly logger = new Logger(QueryExecutor.name);
@@ -57,16 +58,40 @@ export class QueryExecutor {
       throw new QueryExecutionError('QUERY_CANCELLED');
     }
     const startedAt = performance.now();
+    const fetched = await this.inTransaction(signal, async (client) => {
+      await this.declare(client, sql);
+      await this.assertAffordable(client, sql);
+      return this.fetch(client);
+    });
+    return this.toResult(fetched, startedAt);
+  }
+
+  // Only asks the database how it would run the query, and refuses it when the
+  // plan is too expensive, exactly as execute() would before running. Returns
+  // the estimated cost. For SQL that is checked now and run later (review mode).
+  async estimateCost(sql: string, signal?: AbortSignal): Promise<number> {
+    if (signal?.aborted === true) {
+      throw new QueryExecutionError('QUERY_CANCELLED');
+    }
+    return this.inTransaction(signal, async (client) => {
+      await this.declare(client, sql);
+      return this.assertAffordable(client, sql);
+    });
+  }
+
+  // Runs `work` in a read-only transaction under both timeouts, and gives the
+  // connection back (or destroys it) whatever happens.
+  private async inTransaction<T>(
+    signal: AbortSignal | undefined,
+    work: (client: PoolClient) => Promise<T>,
+  ): Promise<T> {
     const client = await this.connect();
     const session: Partial<Session> = {};
 
     try {
-      const fetched = await this.withInterruption(
-        this.runInTransaction(client, sql, session),
-        signal,
-      );
+      const outcome = await this.withInterruption(this.transact(client, session, work), signal);
       client.release();
-      return this.toResult(fetched, startedAt);
+      return outcome;
     } catch (error) {
       await this.discard(client, error, session.backendPid);
       throw this.translate(error);
@@ -82,11 +107,18 @@ export class QueryExecutor {
     }
   }
 
-  private async runInTransaction(
+  private async transact<T>(
     client: PoolClient,
-    sql: string,
     session: Partial<Session>,
-  ): Promise<FetchedRows> {
+    work: (client: PoolClient) => Promise<T>,
+  ): Promise<T> {
+    await this.begin(client, session);
+    const outcome = await work(client);
+    await client.query('ROLLBACK');
+    return outcome;
+  }
+
+  private async begin(client: PoolClient, session: Partial<Session>): Promise<void> {
     await client.query('BEGIN TRANSACTION READ ONLY');
     // SET LOCAL-equivalent: re-applied on every execution, so nothing a previous
     // query did to the session can lift the timeout.
@@ -95,15 +127,33 @@ export class QueryExecutor {
       [String(this.limits.statementTimeoutMs)],
     );
     session.backendPid = setup.rows[0]?.pid;
+  }
 
-    // A cursor lets the database stop producing rows at the limit instead of
-    // sending the full result to be cut in memory. DECLARE also only accepts
-    // SELECT/VALUES, so data-modifying statements fail to parse here.
+  // EXPLAIN without ANALYZE: the query is planned, never run. The user cannot
+  // ask for it (the guard refuses EXPLAIN); only this code does.
+  private async assertAffordable(client: PoolClient, sql: string): Promise<number> {
+    const explained = await client.query<unknown[]>(
+      singleStatement(`EXPLAIN (FORMAT JSON) ${sql}`),
+    );
+    const verdict = assessPlan(explained.rows[0]?.[0], { maxCost: this.limits.maxCost });
+    if (verdict.refusal !== undefined) {
+      throw new QueryExecutionError('QUERY_REJECTED', [{ field: 'sql', message: verdict.refusal }]);
+    }
+    return verdict.totalCost;
+  }
+
+  // A cursor lets the database stop producing rows at the limit instead of
+  // sending the full result to be cut in memory. DECLARE also only accepts
+  // SELECT/VALUES, so data-modifying statements fail to parse here, before
+  // anything else looks at them. Nothing runs until the first FETCH.
+  private async declare(client: PoolClient, sql: string): Promise<void> {
     await client.query(singleStatement(`DECLARE ${CURSOR_NAME} NO SCROLL CURSOR FOR ${sql}`));
+  }
+
+  private async fetch(client: PoolClient): Promise<FetchedRows> {
     const page = await client.query<unknown[]>(
       singleStatement(`FETCH FORWARD ${String(this.limits.maxRows + 1)} FROM ${CURSOR_NAME}`),
     );
-    await client.query('ROLLBACK');
 
     return {
       columns: page.fields.map((field) => ({

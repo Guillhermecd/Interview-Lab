@@ -2,6 +2,7 @@ import type { ServerResponse } from 'node:http';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { ScriptedLlmProvider } from '../../test/support/scripted-llm-provider.js';
+import type { ExecutionSlots } from '../limits/execution-slots.js';
 import type { UsageService } from '../limits/usage.service.js';
 import type { AnswerStreamEvent } from './sse.js';
 import { ConversationController } from './conversation.controller.js';
@@ -18,6 +19,10 @@ const USER = {
 const ALLOW_ALL = {
   assertCanUseLlm: vi.fn(() => Promise.resolve()),
 } as unknown as UsageService;
+const releaseSlot = vi.fn(() => Promise.resolve());
+const SLOTS = {
+  acquire: vi.fn(() => Promise.resolve(releaseSlot)),
+} as unknown as ExecutionSlots;
 const PENDING: PendingReview = {
   messageId: '7',
   question: 'Quais regiões?',
@@ -104,7 +109,7 @@ describe('ConversationController execute stream', () => {
       releaseReview,
       refreshMemory: vi.fn(() => Promise.resolve(false)),
     } as unknown as ConversationService;
-    const controller = new ConversationController(service, ALLOW_ALL);
+    const controller = new ConversationController(service, ALLOW_ALL, SLOTS);
     const { reply, raw, written } = fakeResponse();
 
     await controller.execute(USER, CONVERSATION_ID, '7', { sql: PENDING.generatedSql }, reply);
@@ -125,7 +130,7 @@ describe('ConversationController execute stream', () => {
       executeReview: vi.fn(),
       releaseReview,
     } as unknown as ConversationService;
-    const controller = new ConversationController(service, ALLOW_ALL);
+    const controller = new ConversationController(service, ALLOW_ALL, SLOTS);
     const { reply } = fakeResponse();
     reply.hijack.mockImplementation(() => {
       throw new Error('cannot hijack');
@@ -135,5 +140,7 @@ describe('ConversationController execute stream', () => {
       controller.execute(USER, CONVERSATION_ID, '7', { sql: PENDING.generatedSql }, reply),
     ).rejects.toThrow('cannot hijack');
     expect(releaseReview).toHaveBeenCalledWith('7');
+    // The user's execution slot is given back as well.
+    expect(releaseSlot).toHaveBeenCalled();
   });
 });

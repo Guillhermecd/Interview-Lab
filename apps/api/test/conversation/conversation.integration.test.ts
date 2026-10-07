@@ -550,11 +550,18 @@ describe('conversations over HTTP', () => {
     });
 
     it('cancels the running database query when the client leaves', async () => {
-      // A cross join large enough to run until the statement timeout.
+      // Large enough to run until the statement timeout. Since Phase 10a such a
+      // query is refused for its estimated cost before it runs (and a join
+      // with no condition is refused whatever the limit), so this one has a
+      // condition and the test raises the cost limit: what it checks is the
+      // cancellation of a query already running.
       const slowSql =
-        'SELECT count(*) AS total FROM generate_series(1, 100000) a, generate_series(1, 100000) b';
+        'SELECT count(*) AS total FROM generate_series(1, 100000) a JOIN generate_series(1, 100000) b ON a <> b';
       const provider = new ScriptedLlmProvider([sqlAnswer(slowSql)], ['nunca enviado']);
-      const app = await startApp(provider);
+      const app = await startApp(
+        provider,
+        database.appEnv({ internalEndpointEnabled: true, maxCost: 1_000_000_000_000 }),
+      );
       const baseUrl = await listen(app);
       const conversation = await createConversation(app);
       const abort = new AbortController();

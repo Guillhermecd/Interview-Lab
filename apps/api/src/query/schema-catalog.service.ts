@@ -3,7 +3,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { SchemaOverview } from '@interview-lab/shared';
 import type { Pool } from 'pg';
 import { EXPOSED_SCHEMA, EXPOSED_TABLES } from '../sql-guard/allowlists.js';
-import { READONLY_POOL } from './query.tokens.js';
+import { FIXED_READ_POOL } from './query.tokens.js';
 
 export interface ColumnDescription {
   name: string;
@@ -98,7 +98,7 @@ export class SchemaCatalog {
   private description: Promise<SchemaDescription> | undefined;
   private displayed: Promise<SchemaOverview> | undefined;
 
-  constructor(@Inject(READONLY_POOL) private readonly pool: Pool) {}
+  constructor(@Inject(FIXED_READ_POOL) private readonly pool: Pool) {}
 
   // The schema only changes through migrations, so it is read once per process.
   describe(): Promise<SchemaDescription> {

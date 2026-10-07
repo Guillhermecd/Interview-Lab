@@ -3,6 +3,7 @@ import type { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { seedDemoData } from '../../src/database/seed.js';
 import { GuardedQueryService } from '../../src/query/guarded-query.service.js';
+import { QueryExecutionError } from '../../src/query/query-error.js';
 import { QueryExecutor } from '../../src/query/query-executor.service.js';
 import { createReadonlyPool } from '../../src/query/readonly-pool.js';
 import { EXPOSED_SCHEMA, EXPOSED_TABLES } from '../../src/sql-guard/allowlists.js';
@@ -16,6 +17,8 @@ import {
 } from '../support/test-database.js';
 
 const MAX_ROWS = 1000;
+// The default of the application (QUERY_MAX_COST).
+const MAX_COST = 500_000;
 const TOTAL_ORDERS = 20_000;
 
 describe('GuardedQueryService (SQL guard in front of the executor)', () => {
@@ -29,7 +32,7 @@ describe('GuardedQueryService (SQL guard in front of the executor)', () => {
     await migrateTestDatabase(database);
     await withClient(database.admin, seedDemoData);
 
-    const env = database.appEnv({ maxRows: MAX_ROWS });
+    const env = database.appEnv({ maxRows: MAX_ROWS, maxCost: MAX_COST });
     pool = createReadonlyPool(env.database);
     queries = new GuardedQueryService(
       new SqlGuard({ maxRows: MAX_ROWS, maxJoins: MAX_JOINS }),
@@ -83,6 +86,100 @@ describe('GuardedQueryService (SQL guard in front of the executor)', () => {
         'Sul',
       ]);
       expect(result.truncated).toBe(false);
+    });
+  });
+
+  // D-65: the LIMIT caps the rows returned, not the work done to produce
+  // them. The seed ends with ANALYZE, so the planner's estimates are real.
+  describe('queries estimated as too expensive are refused without running', () => {
+    async function refusalOf(action: Promise<unknown>): Promise<string> {
+      const startedAt = performance.now();
+      const error: unknown = await action.catch((caught: unknown) => caught);
+      const elapsedMs = performance.now() - startedAt;
+
+      expect(error).toBeInstanceOf(QueryExecutionError);
+      const refused = error as QueryExecutionError;
+      expect(refused.code).toBe('QUERY_REJECTED');
+      // Planning takes milliseconds; running any of these would hit the 5 s
+      // statement timeout.
+      expect(elapsedMs).toBeLessThan(2000);
+      return refused.details?.map((detail) => detail.message).join(' ') ?? '';
+    }
+
+    it('refuses a join that has a condition but multiplies the rows, by its cost', async () => {
+      // Every item against every other item of the same product: about sixty
+      // million pairs, properly joined.
+      const reason = await refusalOf(
+        queries.run(
+          'SELECT count(*) FROM order_items a JOIN order_items b ON a.product_id = b.product_id',
+        ),
+      );
+
+      expect(reason).toContain('custo estimado');
+    });
+
+    it('refuses an aggregate over orders × order_items', async () => {
+      const reason = await refusalOf(
+        queries.run('SELECT count(*) FROM orders CROSS JOIN order_items'),
+      );
+
+      // Too expensive and a cross join: the reason given is the one that tells
+      // how to fix the query.
+      expect(reason).toContain('produto cartesiano');
+    });
+
+    it('refuses the bare cross join, which the injected LIMIT makes look cheap', async () => {
+      const reason = await refusalOf(queries.run('SELECT * FROM orders CROSS JOIN order_items'));
+
+      expect(reason).toContain('produto cartesiano');
+    });
+
+    it('refuses the same join written with a comma', async () => {
+      const reason = await refusalOf(queries.run('SELECT o.id, i.id FROM orders o, order_items i'));
+
+      expect(reason).toContain('produto cartesiano');
+    });
+
+    it('refuses two generated series multiplied by each other', async () => {
+      const reason = await refusalOf(
+        queries.run(
+          'SELECT count(*) FROM generate_series(1, 100000) a, generate_series(1, 100000) b',
+        ),
+      );
+
+      expect(reason).toMatch(/custo estimado|produto cartesiano/);
+    });
+
+    it('refuses on check as well, so review mode never shows such SQL', async () => {
+      const reason = await refusalOf(
+        queries.check(
+          'SELECT count(*) FROM order_items a JOIN order_items b ON a.product_id = b.product_id',
+        ),
+      );
+
+      expect(reason).toContain('custo estimado');
+    });
+
+    it('leaves the connection usable after a refusal', async () => {
+      await refusalOf(queries.run('SELECT * FROM orders CROSS JOIN order_items'));
+
+      await expect(queries.run('SELECT count(*) FROM regions')).resolves.toMatchObject({
+        rows: [['5']],
+      });
+    });
+
+    it('accepts a small cross join: every region against every distribution center', async () => {
+      const result = await queries.run(
+        'SELECT r.name, d.name FROM regions r CROSS JOIN distribution_centers d',
+      );
+
+      expect(result.rowCount).toBe(45);
+    });
+
+    it('reports a cost for every legitimate query, all under the limit', async () => {
+      const costs = await Promise.all(LEGITIMATE_QUERIES.map(([, sql]) => queries.check(sql)));
+
+      expect(costs.every((cost) => cost > 0 && cost <= MAX_COST)).toBe(true);
     });
   });
 

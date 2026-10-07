@@ -97,7 +97,9 @@ export function toErrorResponse(exception: unknown, logger: Logger): ErrorRespon
       body: {
         code: exception.code,
         message: exception.message,
-        retryAfterSeconds: exception.retryAfterSeconds,
+        ...(exception.retryAfterSeconds !== undefined && {
+          retryAfterSeconds: exception.retryAfterSeconds,
+        }),
       },
     };
   }
