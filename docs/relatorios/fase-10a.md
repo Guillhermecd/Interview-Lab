@@ -100,7 +100,7 @@ Não fiz conferência visual do aviso novo no navegador; ele tem teste de compon
 - **A mensagem de recusa por custo aparece no chat com o título "Consulta bloqueada pela validação de segurança".** O motivo detalhado vem logo abaixo; o título é o mesmo das recusas da guarda.
 
 - **Mexi no seu ambiente local:**
-  - rodei o `eval:llm` uma vez: 18 chamadas ao Gemini, cerca de 19 mil tokens da sua cota gratuita do dia;
+  - rodei o `eval:llm` uma vez: 18 chamadas ao Gemini, cerca de 22 mil tokens da sua cota gratuita do dia;
   - a API local (porta 3000) ainda roda o código de antes desta fase; para ver os limites novos é preciso reiniciá-la. O seu `.env` não tem as variáveis novas e usa os padrões.
 
 ## 7. Próximo passo proposto
