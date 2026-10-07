@@ -18,6 +18,7 @@ import { ErrorMessage } from '../../components/ui/ErrorMessage';
 import { MessageSquareIcon } from '../../components/ui/icons';
 import { Spinner } from '../../components/ui/Spinner';
 import { useApiData } from '../../hooks/useApiData';
+import { useMoney } from '../../hooks/useMoneyVisibility';
 import { CHAT_PATH, type ChatLocationState } from '../../routes';
 import { formatDateTime, formatDay, formatDecimal, formatInteger } from '../../utils/format';
 import { RegionBars, StockByCenterBars, TopProductsList } from './bars';
@@ -56,6 +57,7 @@ const REVENUE_MODES: { value: RevenueMode; label: string }[] = [
 // computed; nothing here adds up or classifies business data.
 export function DashboardPage() {
   const navigate = useNavigate();
+  const money = useMoney();
   const [choice, setChoice] = useState<DashboardPeriodChoice>({ period: 'month' });
   const [filters, setFilters] = useState<DashboardFilters>({});
   const [revenueMode, setRevenueMode] = useState<RevenueMode>('daily');
@@ -138,7 +140,7 @@ export function DashboardPage() {
               aria-label="Indicadores"
               className="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-3"
             >
-              {kpiCards(data.kpis).map((card) => (
+              {kpiCards(data.kpis, money).map((card) => (
                 <KpiCard
                   key={card.key}
                   label={card.label}

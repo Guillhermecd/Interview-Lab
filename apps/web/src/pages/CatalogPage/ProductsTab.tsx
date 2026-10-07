@@ -14,7 +14,8 @@ import { Modal } from '../../components/ui/Modal';
 import { Spinner } from '../../components/ui/Spinner';
 import { useApiData } from '../../hooks/useApiData';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
-import { formatCurrency, formatInteger } from '../../utils/format';
+import { useMoney } from '../../hooks/useMoneyVisibility';
+import { formatInteger } from '../../utils/format';
 import { Pagination } from './Pagination';
 import { ProductDialog } from './ProductDialog';
 import { StockLevelsDialog } from './StockLevelsDialog';
@@ -43,6 +44,7 @@ type Open =
 // The products of the registry: search, create, edit, set the minimum stock,
 // archive and restore. Archiving replaces deleting: the history stays.
 export function ProductsTab({ options }: ProductsTabProps) {
+  const money = useMoney();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [status, setStatus] = useState<ProductStatusFilter>('active');
@@ -209,10 +211,10 @@ export function ProductsTab({ options }: ProductsTabProps) {
                     </th>
                     <td className="px-3 py-2 whitespace-nowrap text-text-2">{product.category}</td>
                     <td className="px-3 py-2 text-right font-mono whitespace-nowrap">
-                      {formatCurrency(product.price)}
+                      {money.currency(product.price)}
                     </td>
                     <td className="px-3 py-2 text-right font-mono whitespace-nowrap">
-                      {formatCurrency(product.cost)}
+                      {money.currency(product.cost)}
                     </td>
                     <td className="px-3 py-2 text-right font-mono whitespace-nowrap">
                       {formatInteger(product.totalQuantity)} {product.unit}

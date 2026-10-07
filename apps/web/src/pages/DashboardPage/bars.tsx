@@ -1,5 +1,6 @@
 import type { CenterStock, KpiSentiment, RegionRevenue, TopProducts } from '@interview-lab/shared';
-import { formatCompactCurrency, formatCurrency, formatSigned } from '../../utils/format';
+import { useMoney } from '../../hooks/useMoneyVisibility';
+import { formatSigned } from '../../utils/format';
 import { categoryColor } from './labels';
 
 const FULL_PERCENT = 100;
@@ -18,6 +19,7 @@ const SENTIMENT_TEXT: Record<KpiSentiment, string> = {
 
 // Each region: the period (thick bar) over the previous one (thin bar).
 export function RegionBars({ regions }: { regions: RegionRevenue[] }) {
+  const money = useMoney();
   const biggest = Math.max(
     0,
     ...regions.flatMap((region) => [region.revenue, region.previousRevenue]),
@@ -46,7 +48,7 @@ export function RegionBars({ regions }: { regions: RegionRevenue[] }) {
             </div>
             <div className="flex min-w-[78px] flex-col items-end leading-tight">
               <span className="text-[13px] font-semibold tabular-nums">
-                {formatCompactCurrency(region.revenue)}
+                {money.compactCurrency(region.revenue)}
               </span>
               <span
                 className={`text-[11.5px] font-semibold tabular-nums ${SENTIMENT_TEXT[region.sentiment]}`}
@@ -78,6 +80,7 @@ interface TopProductsListProps {
 
 // The best sellers of the period, each bar in the color of its category.
 export function TopProductsList({ top, categories }: TopProductsListProps) {
+  const money = useMoney();
   const biggest = top.items[0]?.revenue ?? 0;
 
   if (top.items.length === 0) {
@@ -110,7 +113,7 @@ export function TopProductsList({ top, categories }: TopProductsListProps) {
             />
           </div>
           <span className="text-right text-[12.5px] font-semibold tabular-nums">
-            {formatCompactCurrency(item.revenue)}
+            {money.compactCurrency(item.revenue)}
           </span>
         </li>
       ))}
@@ -125,6 +128,7 @@ interface StockByCenterBarsProps {
 
 // The stock of each center, stacked by category.
 export function StockByCenterBars({ centers, categories }: StockByCenterBarsProps) {
+  const money = useMoney();
   const biggest = Math.max(0, ...centers.map((center) => center.total));
 
   if (centers.length === 0) {
@@ -165,7 +169,7 @@ export function StockByCenterBars({ centers, categories }: StockByCenterBarsProp
                   value > 0 && (
                     <div
                       key={categories[index] ?? index}
-                      title={`${categories[index] ?? ''}: ${formatCurrency(value)}`}
+                      title={`${categories[index] ?? ''}: ${money.currency(value)}`}
                       className="h-full"
                       style={{ flex: value, backgroundColor: categoryColor(index) }}
                     />
@@ -173,7 +177,7 @@ export function StockByCenterBars({ centers, categories }: StockByCenterBarsProp
               )}
             </div>
             <span className="text-right text-xs font-semibold tabular-nums">
-              {formatCompactCurrency(center.total)}
+              {money.compactCurrency(center.total)}
             </span>
           </li>
         ))}

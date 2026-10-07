@@ -92,6 +92,7 @@ necessárias.
 | 09c | Design: dashboard operacional | Concluída |
 | 09e | Cadastro de materiais e movimentações de estoque | Concluída |
 | 09b | Design: tela do chat em três colunas e painel de schema | Concluída |
+| 09f | Ocultar valores em reais | Concluída |
 | 09d | Design: chat suspenso no dashboard | Pendente |
 | 10 | Observabilidade, hardening, deploy e README | Pendente |
 
@@ -154,6 +155,10 @@ pela tela e rode:
 ```sh
 pnpm --filter @interview-lab/api db:promote-admin voce@exemplo.com
 ```
+
+O **olho** na barra superior esconde os valores em reais do dashboard e da lista de
+materiais (`R$ ••••`), e a escolha fica salva no navegador (D-62). É só na tela: serve
+para mostrá-la a outra pessoa, não é controle de acesso.
 
 O **chat** (`/chat`) tem três colunas: a lista de conversas (busca por título, grupos por data
 e o aviso de conversa aguardando revisão, bloqueada ou com timeout); a conversa, com pergunta em

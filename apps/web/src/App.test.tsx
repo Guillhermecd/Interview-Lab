@@ -157,6 +157,74 @@ describe('App session', () => {
     expect(screen.getByRole('button', { name: 'Usar tema claro' })).toBeInTheDocument();
   });
 
+  it('hides the amounts in reais from the top bar and shows them again', async () => {
+    signedIn();
+    const user = userEvent.setup();
+    renderApp('/dashboard');
+    const indicators = await screen.findByRole('region', { name: 'Indicadores' });
+    const regions = screen.getByRole('region', { name: 'Faturamento por região' });
+    expect(indicators).toHaveTextContent('R$ 43,8 mi');
+    expect(indicators).toHaveTextContent('Ticket médio R$ 18.372,40');
+    const eye = screen.getByRole('button', { name: 'Ocultar valores em reais' });
+    expect(eye).toHaveAttribute('aria-pressed', 'false');
+
+    await user.click(eye);
+
+    expect(eye).toHaveAttribute('aria-pressed', 'true');
+    expect(indicators).toHaveTextContent('R$ ••••');
+    expect(indicators).toHaveTextContent('Ticket médio R$ ••••');
+    expect(indicators).not.toHaveTextContent(/R\$\s\d/);
+    expect(regions).not.toHaveTextContent(/R\$\s\d/);
+    expect(
+      screen.getByRole('region', { name: 'Top 10 materiais por faturamento' }),
+    ).not.toHaveTextContent(/R\$\s\d/);
+    expect(
+      screen.getByRole('region', { name: 'Estoque por centro de distribuição' }),
+    ).not.toHaveTextContent(/R\$\s\d/);
+    // What is not money stays as it was.
+    expect(indicators).toHaveTextContent('92,4%');
+    expect(regions).toHaveTextContent('−7,5%');
+
+    await user.click(eye);
+
+    expect(eye).toHaveAttribute('aria-pressed', 'false');
+    expect(indicators).toHaveTextContent('R$ 43,8 mi');
+  });
+
+  it('remembers that the amounts are hidden', async () => {
+    signedIn();
+    const user = userEvent.setup();
+    const first = renderApp('/dashboard');
+    await user.click(await screen.findByRole('button', { name: 'Ocultar valores em reais' }));
+    first.unmount();
+
+    renderApp('/dashboard');
+
+    const indicators = await screen.findByRole('region', { name: 'Indicadores' });
+    expect(indicators).toHaveTextContent('R$ ••••');
+    expect(indicators).not.toHaveTextContent(/R\$\s\d/);
+    expect(screen.getByRole('button', { name: 'Ocultar valores em reais' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  it('hides price and cost in the registry too', async () => {
+    signedIn();
+    stubCatalog(api).on('GET /api/auth/me', () => jsonResponse(TEST_ADMIN));
+    const user = userEvent.setup();
+    renderApp('/cadastro');
+    const list = await screen.findByRole('region', { name: 'Materiais' });
+    await within(list).findByText('RM-0001');
+    expect(list).toHaveTextContent('R$ 38,00');
+
+    await user.click(screen.getByRole('button', { name: 'Ocultar valores em reais' }));
+
+    expect(list).not.toHaveTextContent(/R\$\s\d/);
+    expect(list).toHaveTextContent('R$ ••••');
+    expect(list).toHaveTextContent('4.200 sc');
+  });
+
   it('signs in and opens the chat', async () => {
     let session = false;
     api
