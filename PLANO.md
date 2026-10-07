@@ -26,10 +26,17 @@ tabela/gráfico + explicação, em streaming.
 | 09b | Design: tela do chat em três colunas e painel de schema | D-41, D-60, D-61 | CONCLUÍDA |
 | 09f | Ocultar valores em reais | D-62 | CONCLUÍDA |
 | 09d | Design: chat suspenso no dashboard | D-42, D-63 | CONCLUÍDA |
-| 10 | Observabilidade, hardening, deploy e README | D-11 | PENDENTE |
+| 10a | Limites de recurso no executor | D-65, D-66 | PENDENTE |
+| 10b | Ajustes de segurança | D-67, D-68 | PENDENTE |
+| 10c | Deploy e demo pública | D-11, D-69, D-70 | PENDENTE |
+| 10d | Avaliação automatizada da LLM | D-71, D-72 | PENDENTE |
+| 10e | Observabilidade | D-73 | PENDENTE |
+| 10f | README e apresentação | — | PENDENTE |
 
 A ordem acima é uma proposta (ver D-10). A Fase 09 entrou em 2026-10-05 (D-38); a ordem
 dos seus PRs e a Fase 09e foram definidas na D-49. A Fase 09f entrou em 2026-10-07 (D-62).
+A Fase 10 foi dividida em seis sub-fases em 2026-10-07 (D-64); o detalhe está em
+[PLANO-fase-10.md](PLANO-fase-10.md).
 
 ---
 
@@ -192,11 +199,18 @@ lembrar a escolha, Cadastro); E2E com recarga da página.
 
 **Verificação:** testes de componentes e E2E do fluxo dashboard → pergunta → resposta.
 
-## Fase 10 — Observabilidade, hardening, deploy e README
-**Objetivo:** projeto apresentável e operável.
-**Entregas**
-- Logs estruturados (sem SQL com dados sensíveis, sem tokens de API); métricas básicas.
-- Revisão de segurança final (checklist em `template/RECOMENDACOES.md`).
-- Deploy (D-11) com CI/CD.
-- README com arquitetura, decisões, camadas de segurança e GIF de demonstração.
-**Verificação:** checklist de segurança completo; smoke test no ambiente publicado.
+## Fase 10 — Hardening, deploy, avaliação e apresentação
+**Objetivo:** projeto apresentável e operável, com uma demo pública.
+
+Dividida em seis sub-fases, numeradas na ordem de execução (D-64). Entregas, verificação e
+decisões de cada uma estão em [PLANO-fase-10.md](PLANO-fase-10.md):
+
+- **10a — Limites de recurso no executor:** concorrência por usuário, custo estimado por `EXPLAIN`, revisão da allowlist de funções.
+- **10b — Ajustes de segurança:** permissão por coluna, erro de permissão como recusa, limite de login por IP, `trustProxy`, escopo no cache.
+- **10c — Deploy e demo pública:** imagens Docker, Lightsail com HTTPS, CI/CD, conta de visitante, proteção de custo, reset diário. Depende da 10a e da 10b.
+- **10d — Avaliação automatizada da LLM:** casos de referência e comparação de resultados.
+- **10e — Observabilidade:** `app.query_runs`, logs estruturados, métricas para administradores. Depende da 10c.
+- **10f — README e apresentação.** Depende da 10c, da 10d e da 10e.
+
+A revisão de segurança final (checklist em `template/RECOMENDACOES.md`) é feita na 10c, antes
+de publicar.
