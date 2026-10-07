@@ -18,7 +18,7 @@ import {
 
 const MAX_ROWS = 1000;
 // The default of the application (QUERY_MAX_COST).
-const MAX_COST = 500_000;
+const MAX_COST = 170_000;
 const TOTAL_ORDERS = 20_000;
 
 describe('GuardedQueryService (SQL guard in front of the executor)', () => {

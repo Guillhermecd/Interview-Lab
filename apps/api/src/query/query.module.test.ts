@@ -38,7 +38,7 @@ const ENV: AppEnv = {
     maxRows: 1000,
     statementTimeoutMs: 5000,
     appTimeoutMs: 7000,
-    maxCost: 500_000,
+    maxCost: 170_000,
     internalEndpointEnabled: false,
   },
   llm: {

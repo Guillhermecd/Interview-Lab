@@ -597,3 +597,40 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Motivo:** (2) o trabalho da 09d estava pronto e verificado, e deixá-lo numa branch durante 10a–10c traria conflito de merge; (5) aplicar a permissão por coluna em `responsible_name` e `document`, que já existem, quebraria o dashboard e o Cadastro, que leem essas colunas pelo mesmo pool (D-54); (6) custo zero.
 - **Outras correções feitas no plano**, por já existirem no código: o pool dedicado de `app_readonly` (Fase 02), a exclusão de `repeat`, `lpad`, `rpad` e `format` da allowlist (Fase 03), a leitura do schema pelo catálogo do banco (Fase 09b) e o limite de login por e-mail (Fase 08).
 - **Em aberto, a decidir no início da 10a:** o dashboard e as leituras do Cadastro dividem o pool somente leitura com o chat; se o chat o saturar, essas telas param.
+
+### D-65 — Custo estimado por `EXPLAIN`, pool das leituras fixas e `generate_series` (Fase 10a)
+- **Contexto:** o `LIMIT` que a guarda impõe restringe as linhas devolvidas, não o trabalho para produzi-las. Um SQL aprovado pela guarda podia ocupar o banco até o timeout.
+- **Opções:** (1) custo: recusar pelo plano estimado | deixar só o timeout. (2) dashboard e cadastro, que dividiam o pool somente leitura com o chat: pool próprio | aceitar. (3) `generate_series`: manter, contida pelo custo | remover | restringir a argumentos literais pequenos.
+- **Status:** DECIDIDA
+- **Escolha:**
+  1. **Custo estimado como heurística complementar.** Depois da guarda e antes de executar, o backend roda `EXPLAIN (FORMAT JSON)`, sem `ANALYZE`, na mesma conexão e transação da consulta. Recusa (`422 QUERY_REJECTED`, com o motivo em `details`) quando o custo total passa de `QUERY_MAX_COST` ou quando o plano tem um produto cartesiano grande. O timeout continua sendo a rede de segurança: o estimador pode errar nos dois sentidos.
+  2. **Pool próprio para as leituras fixas** (`FIXED_READ_POOL_MAX`, padrão 5), também como `app_readonly`: dashboard, leituras do cadastro, `/api/schema` e `/api/health`. O pool do chat passa a ter tamanho próprio (`READONLY_POOL_MAX`, padrão 5); `DB_POOL_MAX` fica para o pool da aplicação e o do cadastro.
+  3. **`generate_series` fica na allowlist.** O abuso (duas séries grandes cruzadas) é recusado pela verificação de custo.
+- **Data:** 2026-10-07
+- **Motivo:** (1) fecha o caso mais barato de esgotamento sem depender de o timeout disparar; (2) sem isso o chat saturado derrubava as telas, e a entrega do plano só protegia login e health; (3) a função serve para calendários, e há uma consulta legítima no corpus de testes que a usa.
+- **Calibração do `QUERY_MAX_COST` (2026-10-07, `gemini-3.5-flash-lite`, banco local recém-semeado e com `ANALYZE`):** maior custo entre as perguntas de avaliação: 16.639 ("ticket médio por categoria de produto"). Padrão: **170.000** (10 vezes, arredondado para cima). As 20 consultas legítimas do corpus de testes ficam em até 6.074. A tabela completa está no relatório da fase.
+- **Detalhes de implementação (escolhidos pelo Claude, para revisão):**
+  - **Produto cartesiano:** um `Nested Loop` sem `Join Filter`, cujo lado interno não é uma busca por índice, estimado em mais de **1 milhão de linhas** (constante no código). O plano falava em recusar qualquer um; o piso existe porque cruzamentos pequenos são legítimos — toda região contra todo mês, calendário contra centros de distribuição.
+  - **Qual custo é comparado:** o da consulta inteira (a raiz do plano), não o do nó mais caro. Por isso a regra do produto cartesiano é necessária: com o `LIMIT` que a guarda injeta, `SELECT * FROM orders CROSS JOIN order_items` custa cerca de 12.
+  - **Quando as duas regras valem, o motivo informado é o produto cartesiano,** porque diz como corrigir a consulta.
+  - **O modo de revisão também verifica o custo** antes de mostrar o SQL: sem isso a IA nunca tentaria de novo e o usuário aprovaria um SQL que seria recusado em seguida.
+  - **A ordem é `DECLARE`, `EXPLAIN`, `FETCH`.** Declarar o cursor primeiro mantém os erros de antes para o que não é consulta (`INSERT` continua falhando como erro de sintaxe); nada roda até o `FETCH`.
+  - **As leituras fixas não passam pela verificação de custo:** são SQL escrito no código.
+- **Limites aceitos:** a estimativa depende das estatísticas do banco; o `db:seed` termina com `ANALYZE`, mas dados lançados depois pelo cadastro só entram nas estatísticas quando o autovacuum as atualizar. Uma única `generate_series` com limites que não são constantes é estimada em 1.000 linhas, qualquer que seja o tamanho real: esse caso depende do timeout.
+
+### D-66 — Uma execução por vez por usuário, contada no Redis (Fase 10a)
+- **Opções:** contador no Redis | contador em memória da API
+- **Status:** DECIDIDA
+- **Escolha:** contador por usuário no Redis (`inflight:{usuário}`), com `EXEC_MAX_INFLIGHT_PER_USER` (padrão 1). Acima do limite a resposta é `429` com `code: "EXECUTION_IN_PROGRESS"`, antes de qualquer chamada à LLM.
+- **Data:** 2026-10-07
+- **Motivo:** funciona com mais de uma instância da API; em memória, cada instância contaria só as suas.
+- **Detalhes de implementação (escolhidos pelo Claude, para revisão):**
+  - **O que conta:** perguntas e execuções de SQL revisado. As leituras do dashboard não contam (a tela faz quatro em paralelo).
+  - **Atomicidade:** ocupar e liberar são dois scripts Lua pequenos. Uma requisição recusada desfaz o próprio incremento, e a liberação nunca leva o contador abaixo de zero.
+  - **Validade de segurança de 10 minutos** na chave: se o processo morrer segurando a vaga, ela volta sozinha. É maior que a pergunta mais longa possível com os timeouts no máximo.
+  - **A vaga é liberada antes do resumo da conversa,** que roda depois de a resposta ser entregue e não deve segurar a próxima pergunta.
+  - **Uma espera curta (250 ms) antes de recusar:** parar uma resposta e perguntar de novo chega ao servidor um instante antes de a vaga da resposta parada ser liberada.
+  - **A recusa por concorrência não gasta uma das perguntas do minuto:** a vaga é verificada antes do limite por minuto.
+  - **Sem contagem regressiva:** a resposta não traz `retryAfterSeconds`, porque a liberação depende de a outra pergunta terminar. A tela mostra um aviso próprio, com "Tentar novamente".
+  - **Redis fora do ar:** a pergunta falha, como já acontece com o limite por minuto.
+- **Consequência:** com o limite em 1, a recusa `409` de "esta revisão já está sendo executada" deixa de ser alcançável pelo mesmo usuário — a segunda requisição recebe o `429` antes. A proteção continua no código e vale quando o limite é maior.

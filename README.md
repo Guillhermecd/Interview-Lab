@@ -31,7 +31,7 @@ camada substitui a outra:
 |---|---|
 | 1. Role read-only no banco | Fronteira real. Só `SELECT` nas tabelas expostas, `default_transaction_read_only = on` e `statement_timeout`. |
 | 2. Guarda SQL | Validação sobre a AST do parser, nunca por regex: um único statement, apenas leitura, allowlist de tabelas, `LIMIT` obrigatório, bloqueio de funções perigosas. |
-| 3. Limites de execução | Timeout na aplicação e limite de linhas retornadas. |
+| 3. Limites de execução | Timeout na aplicação, limite de linhas retornadas, recusa de planos estimados como caros demais (`EXPLAIN`) e uma execução por vez por usuário. |
 
 Regras complementares:
 
@@ -94,7 +94,7 @@ necessárias.
 | 09b | Design: tela do chat em três colunas e painel de schema | Concluída |
 | 09f | Ocultar valores em reais | Concluída |
 | 09d | Design: chat suspenso no dashboard | Concluída |
-| 10a | Limites de recurso no executor | Pendente |
+| 10a | Limites de recurso no executor | Concluída |
 | 10b | Ajustes de segurança | Pendente |
 | 10c | Deploy e demo pública | Pendente |
 | 10d | Avaliação automatizada da LLM | Pendente |
@@ -246,6 +246,19 @@ explicitamente liberado é recusado.
 
 Quando recusa, a resposta é `422` com `code: "QUERY_REJECTED"` e o motivo em `details`,
 escrito para que o usuário ou a LLM consigam corrigir a consulta.
+
+Depois da guarda, e antes de executar, a API pede ao PostgreSQL o plano da consulta
+(`EXPLAIN`, sem `ANALYZE`: nada roda) e a recusa, com o mesmo `QUERY_REJECTED`, quando o
+custo estimado passa de `QUERY_MAX_COST` ou quando o plano cruza tabelas sem condição de
+junção em mais de 1 milhão de linhas (D-65). O `LIMIT` restringe as linhas devolvidas, não
+o trabalho para produzi-las; esta verificação olha o trabalho. É uma heurística sobre a
+estimativa do banco: o timeout continua sendo o que de fato interrompe uma consulta.
+
+Cada usuário tem uma pergunta ou execução de SQL em andamento por vez
+(`EXEC_MAX_INFLIGHT_PER_USER`, D-66); a seguinte recebe `429` com
+`code: "EXECUTION_IN_PROGRESS"`, antes de qualquer chamada à LLM. O SQL do chat usa um
+pool de conexões só dele: se ficar todo ocupado, dashboard, cadastro, `/api/schema` e
+`/api/health` continuam respondendo por outro pool.
 
 ```sh
 curl -X POST http://localhost:3000/api/internal/queries/execute \

@@ -20,9 +20,9 @@ const DEFAULT_FIXED_READ_POOL_MAX = 5;
 const DEFAULT_QUERY_MAX_ROWS = 1000;
 const DEFAULT_STATEMENT_TIMEOUT_MS = 5000;
 const DEFAULT_APP_TIMEOUT_MS = 7000;
-// Calibrated in Phase 10a: ten times the most expensive plan seen in the
+// Calibrated in Phase 10a (D-65): ten times the most expensive plan seen in the
 // evaluation questions (docs/relatorios/fase-10a.md).
-const DEFAULT_QUERY_MAX_COST = 500_000;
+const DEFAULT_QUERY_MAX_COST = 170_000;
 const MAX_QUERY_COST = 1_000_000_000_000;
 
 const DEFAULT_LLM_MODEL = 'gemini-3.5-flash-lite';

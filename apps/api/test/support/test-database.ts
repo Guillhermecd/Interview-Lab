@@ -25,7 +25,7 @@ const DEFAULT_TEST_QUERY_ENV: QueryEnv = {
   appTimeoutMs: 7000,
   // The default of the application: the tests run under the real limit. A test
   // that needs a query to run long raises it.
-  maxCost: 500_000,
+  maxCost: 170_000,
   internalEndpointEnabled: false,
 };
 
