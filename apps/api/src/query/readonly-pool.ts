@@ -17,16 +17,21 @@ function keepText(value: string): string {
   return value;
 }
 
-// The only pool the API uses to run queries. The user is fixed to the read-only
-// role on purpose: no configuration can point it at a more privileged user.
-export function createReadonlyPool(database: ReadonlyDatabaseEnv): Pool {
+// The pools the API uses to read `sales`: one for SQL that came from the LLM or
+// from a user, one for statements written in the code. The user is fixed to the
+// read-only role on purpose: no configuration can point either at a more
+// privileged user.
+export function createReadonlyPool(
+  database: ReadonlyDatabaseEnv,
+  max: number = database.poolMax,
+): Pool {
   const pool = new Pool({
     host: database.host,
     port: database.port,
     database: database.name,
     user: READONLY_ROLE,
     password: database.readonlyPassword,
-    max: database.poolMax,
+    max,
     connectionTimeoutMillis: CONNECTION_TIMEOUT_MS,
     idleTimeoutMillis: IDLE_TIMEOUT_MS,
   });

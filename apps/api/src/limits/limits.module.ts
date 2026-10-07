@@ -1,5 +1,6 @@
 import { Module, type DynamicModule } from '@nestjs/common';
 import type { LimitsEnv } from '../config/security-env.js';
+import { ExecutionSlots } from './execution-slots.js';
 import { RateLimiter } from './rate-limiter.js';
 import { UsageController } from './usage.controller.js';
 import { UsageRepository } from './usage.repository.js';
@@ -15,10 +16,11 @@ export class LimitsModule {
       providers: [
         { provide: LIMITS_ENV, useValue: env },
         RateLimiter,
+        ExecutionSlots,
         UsageRepository,
         UsageService,
       ],
-      exports: [LIMITS_ENV, RateLimiter, UsageService],
+      exports: [LIMITS_ENV, RateLimiter, ExecutionSlots, UsageService],
     };
   }
 }

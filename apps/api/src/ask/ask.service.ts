@@ -195,18 +195,16 @@ export class AskService {
     );
   }
 
-  // Review mode: generates the SQL and checks it with the guard, without
-  // running it. The SQL shown to the user has already passed the guard once.
+  // Review mode: generates the SQL and checks it with the guard and against the
+  // cost limit, without running it. The SQL shown to the user has already
+  // passed both once.
   async *streamReview(
     input: AskInput,
     signal?: AbortSignal,
   ): AsyncGenerator<AskEvent, SqlForReview | UnansweredQuestion> {
     const llm = new MeteredLlm(this.provider, signal);
 
-    const generated = yield* this.generate(input, llm, (sql) => {
-      this.queries.check(sql);
-      return Promise.resolve();
-    });
+    const generated = yield* this.generate(input, llm, (sql) => this.queries.check(sql, signal));
     if (isRefusal(generated)) {
       return yield* this.refuse(input.question, generated.reason, llm);
     }

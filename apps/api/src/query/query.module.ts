@@ -8,14 +8,17 @@ import { FixedReadQuery } from './fixed-read-query.service.js';
 import { GuardedQueryService } from './guarded-query.service.js';
 import { QueryController } from './query.controller.js';
 import { QueryExecutor } from './query-executor.service.js';
-import { QUERY_ENV, READONLY_POOL, SQL_GUARD } from './query.tokens.js';
+import { FIXED_READ_POOL, QUERY_ENV, READONLY_POOL, SQL_GUARD } from './query.tokens.js';
 import { createReadonlyPool } from './readonly-pool.js';
 import { SchemaCatalog } from './schema-catalog.service.js';
 import { SchemaController } from './schema.controller.js';
 
 @Module({})
 export class QueryModule implements OnModuleDestroy {
-  constructor(@Inject(READONLY_POOL) private readonly pool: Pool) {}
+  constructor(
+    @Inject(READONLY_POOL) private readonly pool: Pool,
+    @Inject(FIXED_READ_POOL) private readonly fixedReadPool: Pool,
+  ) {}
 
   static register(env: AppEnv): DynamicModule {
     return {
@@ -26,7 +29,14 @@ export class QueryModule implements OnModuleDestroy {
         ? [SchemaController, QueryController]
         : [SchemaController],
       providers: [
-        { provide: READONLY_POOL, useFactory: () => createReadonlyPool(env.database) },
+        {
+          provide: READONLY_POOL,
+          useFactory: () => createReadonlyPool(env.database),
+        },
+        {
+          provide: FIXED_READ_POOL,
+          useFactory: () => createReadonlyPool(env.database, env.database.fixedReadPoolMax),
+        },
         { provide: QUERY_ENV, useValue: env.query },
         {
           provide: SQL_GUARD,
@@ -42,7 +52,7 @@ export class QueryModule implements OnModuleDestroy {
         SchemaCatalog,
         FixedReadQuery,
       ],
-      // The pool and QueryExecutor stay private. Outside this module, SQL text
+      // The pools and QueryExecutor stay private. Outside this module, SQL text
       // that came from a user or from the LLM only runs through
       // GuardedQueryService; FixedReadQuery is for statements written in the
       // code, with values as parameters (D-54).
@@ -51,6 +61,6 @@ export class QueryModule implements OnModuleDestroy {
   }
 
   async onModuleDestroy(): Promise<void> {
-    await this.pool.end();
+    await Promise.all([this.pool.end(), this.fixedReadPool.end()]);
   }
 }

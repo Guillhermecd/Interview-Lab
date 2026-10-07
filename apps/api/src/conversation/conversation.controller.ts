@@ -17,6 +17,7 @@ import type { AuthUser, Conversation, ConversationList, MessageList } from '@int
 import { AuthGuard, CurrentUser } from '../auth/auth.guard.js';
 import { toErrorResponse } from '../http/error-response.js';
 import { readAskMode, readQuestion, readSql } from '../http/request-readers.js';
+import { ExecutionSlots } from '../limits/execution-slots.js';
 import { UsageService } from '../limits/usage.service.js';
 import { describeErrorForLog } from '../query/query-error.js';
 import { ConversationService } from './conversation.service.js';
@@ -34,7 +35,7 @@ interface StreamReply {
 
 // Conversations of the signed-in user (Phase 08). Anything that calls the LLM
 // is checked against the rate limit and the daily quota before it starts
-// (rule 7).
+// (rule 7), and takes one of the user's execution slots while it runs (D-66).
 @Controller('conversations')
 @UseGuards(AuthGuard)
 export class ConversationController {
@@ -43,6 +44,7 @@ export class ConversationController {
   constructor(
     @Inject(ConversationService) private readonly conversations: ConversationService,
     @Inject(UsageService) private readonly usage: UsageService,
+    @Inject(ExecutionSlots) private readonly slots: ExecutionSlots,
   ) {}
 
   @Post()
@@ -76,11 +78,21 @@ export class ConversationController {
     const question = readQuestion(body);
     const mode = readAskMode(body);
     await this.assertOwned(id, user.id);
-    await this.usage.assertCanUseLlm(user.id);
+    // Before the rate limit: a question refused for being the second at once
+    // does not use up one of the questions of the minute.
+    const releaseSlot = await this.slots.acquire(user.id);
 
-    const completed = await this.stream(reply, (signal) =>
-      this.conversations.answer(user.id, id, question, mode, signal),
-    );
+    let completed: boolean;
+    try {
+      await this.usage.assertCanUseLlm(user.id);
+      completed = await this.stream(reply, (signal) =>
+        this.conversations.answer(user.id, id, question, mode, signal),
+      );
+    } finally {
+      // Released before the summary below: it runs after the answer was
+      // delivered and must not hold the next question back.
+      await releaseSlot();
+    }
     if (completed) {
       await this.refreshMemory(user.id, id);
     }
@@ -103,16 +115,21 @@ export class ConversationController {
       throw new NotFoundException();
     }
     await this.assertOwned(id, user.id);
-    await this.usage.assertCanUseLlm(user.id);
-    const pending = await this.conversations.claimPendingReview(id, messageId);
+    const releaseSlot = await this.slots.acquire(user.id);
 
     let completed: boolean;
     try {
-      completed = await this.stream(reply, (signal) =>
-        this.conversations.executeReview(user.id, id, pending, sql, signal),
-      );
+      await this.usage.assertCanUseLlm(user.id);
+      const pending = await this.conversations.claimPendingReview(id, messageId);
+      try {
+        completed = await this.stream(reply, (signal) =>
+          this.conversations.executeReview(user.id, id, pending, sql, signal),
+        );
+      } finally {
+        this.conversations.releaseReview(pending.messageId);
+      }
     } finally {
-      this.conversations.releaseReview(pending.messageId);
+      await releaseSlot();
     }
     if (completed) {
       await this.refreshMemory(user.id, id);

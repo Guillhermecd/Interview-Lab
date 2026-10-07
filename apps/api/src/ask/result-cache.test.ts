@@ -12,6 +12,7 @@ const LIMITS: LimitsEnv = {
   questionsPerMinute: 10,
   dailyTokenQuota: 200_000,
   loginAttemptsPerMinute: 5,
+  maxInflightPerUser: 1,
   sqlCacheTtlSeconds: 3600,
   resultCacheTtlSeconds: 300,
 };

@@ -26,7 +26,7 @@ tabela/gráfico + explicação, em streaming.
 | 09b | Design: tela do chat em três colunas e painel de schema | D-41, D-60, D-61 | CONCLUÍDA |
 | 09f | Ocultar valores em reais | D-62 | CONCLUÍDA |
 | 09d | Design: chat suspenso no dashboard | D-42, D-63 | CONCLUÍDA |
-| 10a | Limites de recurso no executor | D-65, D-66 | PENDENTE |
+| 10a | Limites de recurso no executor | D-65, D-66 | CONCLUÍDA |
 | 10b | Ajustes de segurança | D-67, D-68 | PENDENTE |
 | 10c | Deploy e demo pública | D-11, D-69, D-70 | PENDENTE |
 | 10d | Avaliação automatizada da LLM | D-71, D-72 | PENDENTE |

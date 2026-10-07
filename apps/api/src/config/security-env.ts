@@ -9,6 +9,8 @@ const DEFAULT_REDIS_URL = 'redis://localhost:6379';
 const DEFAULT_QUESTIONS_PER_MINUTE = 10;
 const DEFAULT_DAILY_TOKEN_QUOTA = 200_000;
 const DEFAULT_LOGIN_ATTEMPTS_PER_MINUTE = 5;
+const DEFAULT_MAX_INFLIGHT_PER_USER = 1;
+const MAX_INFLIGHT_PER_USER = 100;
 const DEFAULT_SQL_CACHE_TTL_SECONDS = 3600;
 const DEFAULT_RESULT_CACHE_TTL_SECONDS = 300;
 const MAX_CACHE_TTL_SECONDS = 86_400;
@@ -37,6 +39,8 @@ export interface LimitsEnv {
   questionsPerMinute: number;
   dailyTokenQuota: number;
   loginAttemptsPerMinute: number;
+  // Questions and SQL executions one user may have running at the same time (D-66).
+  maxInflightPerUser: number;
   sqlCacheTtlSeconds: number;
   resultCacheTtlSeconds: number;
 }
@@ -105,6 +109,11 @@ export function loadLimitsEnv(source: NodeJS.ProcessEnv): LimitsEnv {
       defaultValue: DEFAULT_LOGIN_ATTEMPTS_PER_MINUTE,
       min: 1,
       max: 1000,
+    }),
+    maxInflightPerUser: parseInteger(source, 'EXEC_MAX_INFLIGHT_PER_USER', {
+      defaultValue: DEFAULT_MAX_INFLIGHT_PER_USER,
+      min: 1,
+      max: MAX_INFLIGHT_PER_USER,
     }),
     // 0 disables the cache.
     sqlCacheTtlSeconds: parseInteger(source, 'SQL_CACHE_TTL_SECONDS', {

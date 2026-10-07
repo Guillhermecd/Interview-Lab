@@ -157,6 +157,17 @@ function alertContent(
       retry: false,
     };
   }
+  // Another question of the same user is still running (another tab, or the
+  // floating window). Nothing to count down: it frees when that one ends.
+  if (code === 'EXECUTION_IN_PROGRESS') {
+    return {
+      variant: 'warn',
+      title: 'Outra pergunta sua ainda está em andamento',
+      body: error.message,
+      details,
+      retry: true,
+    };
+  }
   if (code === 'QUERY_TIMEOUT') {
     return {
       variant: 'warn',

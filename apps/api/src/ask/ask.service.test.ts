@@ -49,6 +49,8 @@ const FAKE_TABLES = ['regions', 'orders'];
 
 // Answers each run() or check() with the next outcome and records what it
 // received. check() only uses the outcome to decide whether to throw.
+const FAKE_COST = 42;
+
 class FakeQueries {
   readonly executed: string[] = [];
   readonly checked: string[] = [];
@@ -71,12 +73,10 @@ class FakeQueries {
     return [...FAKE_TABLES];
   }
 
-  check(sql: string): void {
+  check(sql: string): Promise<number> {
     this.checked.push(sql);
     const outcome = this.outcomes.shift();
-    if (outcome instanceof Error) {
-      throw outcome;
-    }
+    return outcome instanceof Error ? Promise.reject(outcome) : Promise.resolve(FAKE_COST);
   }
 }
 

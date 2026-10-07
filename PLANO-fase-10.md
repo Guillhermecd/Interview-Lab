@@ -10,7 +10,7 @@
 
 | Sub-fase | Nome | Depende de | Status |
 |---|---|---|---|
-| 10a | Limites de recurso no executor | — | Pendente |
+| 10a | Limites de recurso no executor | — | Concluída |
 | 10b | Ajustes de segurança | — | Pendente |
 | 10c | Deploy e demo pública | 10a, 10b | Pendente |
 | 10d | Avaliação automatizada da LLM | — | Pendente |
@@ -33,12 +33,12 @@ se aplica; as tomadas na preparação (2026-10-07) estão na D-64.
 ### Entregas
 
 1. **Tamanho próprio para o pool de `app_readonly`** (`READONLY_POOL_MAX`, padrão 5). O
-   pool dedicado já existe desde a Fase 02 (`query/readonly-pool.ts`), separado do pool da
-   aplicação (`app_rw`) e do pool do cadastro; hoje os três leem o mesmo tamanho. Saturar o
+   pool dedicado já existia desde a Fase 02 (`query/readonly-pool.ts`), separado do pool da
+   aplicação (`app_rw`) e do pool do cadastro, mas os três liam o mesmo tamanho. Saturar o
    pool somente leitura não afeta login, histórico nem `/api/health`.
-   - **A decidir no início da 10a:** o dashboard e as leituras do cadastro usam esse mesmo
-     pool (D-54). Se o chat o saturar, essas telas param. Opções: pool próprio para as
-     leituras fixas | aceitar e registrar.
+   - **Decidido no início da 10a (D-65):** as leituras fixas do código — dashboard,
+     cadastro, `/api/schema` e `/api/health` — ganham um segundo pool, também como
+     `app_readonly` (`FIXED_READ_POOL_MAX`, padrão 5). O chat saturado não as afeta.
 2. **Limite de execuções simultâneas por usuário** (`EXEC_MAX_INFLIGHT_PER_USER`, padrão 1),
    controlado no Redis com `INCR`/`DECR` e um TTL de segurança, liberado em `finally`
    (sucesso, erro, timeout e cancelamento pelo cliente). Acima do limite: `429` com
@@ -46,34 +46,42 @@ se aplica; as tomadas na preparação (2026-10-07) estão na D-64.
 3. **Verificação de custo estimado:** depois da guarda e antes de executar, o backend roda
    `EXPLAIN (FORMAT JSON)` (sem `ANALYZE`) como `app_readonly`.
    - Recusa quando `Total Cost` > `QUERY_MAX_COST`.
-   - Recusa quando o plano tiver `Nested Loop` sem condição de junção (produto cartesiano).
+   - Recusa quando o plano tiver `Nested Loop` sem condição de junção (produto cartesiano)
+     estimado em mais de 1 milhão de linhas. O piso existe porque cruzamentos pequenos são
+     legítimos (toda região contra todo mês); a busca por índice no lado interno conta como
+     condição de junção.
    - A recusa é `422 QUERY_REJECTED`, com um motivo legível em `details`, e entra no ciclo
      de nova tentativa da LLM.
    - O `EXPLAIN` continua proibido para o usuário na guarda: só o backend o executa.
-4. **Revisão da allowlist de funções:** remover ou restringir `generate_series`, a única
-   função que gera linhas ainda permitida (`repeat`, `lpad`, `rpad` e `format` já estão
-   fora desde a Fase 03). Cada remoção é coberta por um teste unitário da guarda.
+4. **Revisão da allowlist de funções:** `generate_series`, a única função que gera linhas
+   ainda permitida, **fica** (decidido no início da 10a, D-65): ela serve para calendários,
+   e o abuso — duas séries grandes cruzadas — passa a ser recusado pela verificação de
+   custo. `repeat`, `lpad`, `rpad` e `format` já estão fora desde a Fase 03.
 5. **Calibração do `QUERY_MAX_COST`:** documentada no relatório da fase, com o custo
    máximo observado nas perguntas de avaliação × 10.
 
 ### Verificação
 
-- [ ] Integração: um `CROSS JOIN` entre `orders` e `order_items` é recusado por custo, sem
-      chegar a executar.
-- [ ] Integração: duas requisições simultâneas do mesmo usuário → a segunda recebe `429
+- [x] Integração: um `CROSS JOIN` entre `orders` e `order_items` é recusado sem chegar a
+      executar — como produto cartesiano, com ou sem agregação; uma junção com condição que
+      multiplica as linhas é recusada por custo.
+- [x] Integração: duas requisições simultâneas do mesmo usuário → a segunda recebe `429
       EXECUTION_IN_PROGRESS`; usuários diferentes não se bloqueiam.
-- [ ] Integração: o contador de execuções volta a 0 depois de erro, timeout e cliente
+- [x] Integração: o contador de execuções volta a 0 depois de erro, timeout e cliente
       desconectado.
-- [ ] Integração: com o pool do readonly ocupado por queries lentas, `/api/health` e
-      `/api/auth/me` respondem normalmente.
-- [ ] Unitário: as funções removidas da allowlist são recusadas pela guarda.
-- [ ] As 10 perguntas do `eval:llm` continuam executando sem recusa por custo.
-- [ ] `pnpm verify` verde.
+- [x] Integração: com o pool do readonly ocupado por queries lentas, `/api/health`,
+      `/api/auth/me`, `/api/schema` e o dashboard respondem normalmente.
+- [x] Integração: duas `generate_series` de 100 mil cruzadas são recusadas sem executar
+      (substitui "as funções removidas da allowlist são recusadas": nenhuma foi removida).
+- [x] As 10 perguntas do `eval:llm` executam sem recusa por custo (maior custo: 16.639,
+      contra o limite de 170.000).
+- [x] `pnpm verify` verde.
 
 ### Decisões
 
 - **D-65:** custo estimado via `EXPLAIN` como heurística complementar; o timeout continua
-  sendo a rede de segurança (o estimador pode errar nos dois sentidos).
+  sendo a rede de segurança (o estimador pode errar nos dois sentidos). Inclui o segundo
+  pool para as leituras fixas e a permanência de `generate_series`.
 - **D-66:** limite de concorrência por usuário no Redis (e não em memória), para funcionar
   com mais de uma instância da API.
 
@@ -334,9 +342,10 @@ regressão quando o prompt, o modelo ou o schema mudar.
 
 | Variável | Sub-fase | Padrão |
 |---|---|---|
-| `READONLY_POOL_MAX` | 10a | `5` (hoje o pool usa `DB_POOL_MAX`, comum aos três pools) |
+| `READONLY_POOL_MAX` | 10a | `5` |
+| `FIXED_READ_POOL_MAX` | 10a | `5` |
 | `EXEC_MAX_INFLIGHT_PER_USER` | 10a | `1` |
-| `QUERY_MAX_COST` | 10a | calibrado na fase |
+| `QUERY_MAX_COST` | 10a | `170000` (calibrado na fase) |
 | `LOGIN_IP_MAX_ATTEMPTS` | 10b | `20` |
 | `LOGIN_IP_WINDOW_SECONDS` | 10b | `900` |
 | `TRUST_PROXY` | 10b | `false` (`true` em produção) |

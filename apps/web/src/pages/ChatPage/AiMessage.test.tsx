@@ -277,6 +277,28 @@ describe('AiMessage states', () => {
     expect(screen.queryByRole('region', { name: 'Consulta SQL' })).not.toBeInTheDocument();
   });
 
+  it('execution in progress: says so, with no countdown, and lets the user try again', async () => {
+    const { handlers, user } = setup(
+      answer({
+        status: 'error',
+        error: {
+          code: 'EXECUTION_IN_PROGRESS',
+          message: 'Já existe uma pergunta sua em andamento. Aguarde ela terminar.',
+        },
+      }),
+    );
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('Outra pergunta sua ainda está em andamento');
+    expect(alert).toHaveTextContent('Já existe uma pergunta sua em andamento.');
+    expect(within(alert).queryByRole('timer')).not.toBeInTheDocument();
+    expect(alert).not.toHaveTextContent('Muitas perguntas em sequência');
+
+    await user.click(within(alert).getByRole('button', { name: 'Tentar novamente' }));
+
+    expect(handlers.onRetry).toHaveBeenCalledTimes(1);
+  });
+
   it('quota: shows the usage, when it renews, and no way to insist', () => {
     setup(
       answer({

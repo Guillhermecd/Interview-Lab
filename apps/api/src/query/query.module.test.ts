@@ -5,7 +5,7 @@ import { FixedReadQuery } from './fixed-read-query.service.js';
 import { GuardedQueryService } from './guarded-query.service.js';
 import { QueryExecutor } from './query-executor.service.js';
 import { QueryModule } from './query.module.js';
-import { READONLY_POOL } from './query.tokens.js';
+import { FIXED_READ_POOL, READONLY_POOL } from './query.tokens.js';
 import { QueryController } from './query.controller.js';
 import { SchemaCatalog } from './schema-catalog.service.js';
 import { SchemaController } from './schema.controller.js';
@@ -18,6 +18,7 @@ const ENV: AppEnv = {
     name: 'interview_lab',
     readonlyPassword: 'readonly-secret',
     poolMax: 1,
+    fixedReadPoolMax: 1,
   },
   appDatabase: {
     host: 'localhost',
@@ -37,6 +38,7 @@ const ENV: AppEnv = {
     maxRows: 1000,
     statementTimeoutMs: 5000,
     appTimeoutMs: 7000,
+    maxCost: 170_000,
     internalEndpointEnabled: false,
   },
   llm: {
@@ -56,6 +58,7 @@ const ENV: AppEnv = {
     questionsPerMinute: 10,
     dailyTokenQuota: 200_000,
     loginAttemptsPerMinute: 5,
+    maxInflightPerUser: 1,
     sqlCacheTtlSeconds: 3600,
     resultCacheTtlSeconds: 300,
   },
@@ -76,10 +79,11 @@ describe('QueryModule', () => {
     ]);
   });
 
-  it('never exports the pool or the unguarded executor', () => {
+  it('never exports the pools or the unguarded executor', () => {
     const exported = QueryModule.register(ENV).exports ?? [];
 
     expect(exported).not.toContain(READONLY_POOL);
+    expect(exported).not.toContain(FIXED_READ_POOL);
     expect(exported).not.toContain(QueryExecutor);
   });
 

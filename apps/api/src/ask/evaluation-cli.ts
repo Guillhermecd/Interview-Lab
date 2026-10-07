@@ -67,25 +67,33 @@ async function main(): Promise<void> {
 
   await loadModule();
   const pool = createReadonlyPool(env.database);
+  const queries = new GuardedQueryService(
+    new SqlGuard({ maxRows: env.query.maxRows, maxJoins: MAX_JOINS }),
+    new QueryExecutor(pool, env.query),
+  );
   const service = new AskService(
     createLlmProvider(env.llm),
     new SchemaCatalog(pool),
-    new GuardedQueryService(
-      new SqlGuard({ maxRows: env.query.maxRows, maxJoins: MAX_JOINS }),
-      new QueryExecutor(pool, env.query),
-    ),
+    queries,
     { maxRows: env.query.maxRows, explainMaxRows: env.llm.explainMaxRows },
     // The evaluation measures the LLM, so nothing is served from cache.
     new NoAnswerCache(),
   );
 
   print(`# Avaliação manual — modelo ${env.llm.model}`);
+  print(`Limite de custo (QUERY_MAX_COST): ${String(env.query.maxCost)}`);
   try {
     for (const [index, question] of EVALUATION_QUESTIONS.entries()) {
       print('');
       print(`## ${String(index + 1)}. ${question}`);
       try {
-        printResponse(await service.ask(question));
+        const response = await service.ask(question);
+        printResponse(response);
+        if (response.status === 'answered') {
+          // What the planner estimated for the SQL the LLM wrote: the numbers
+          // QUERY_MAX_COST is calibrated from (D-65).
+          print(`- Custo estimado: ${String(Math.round(await queries.check(response.sql)))}`);
+        }
       } catch (error) {
         print(`- Resultado: erro — ${describeError(error)}`);
       }
