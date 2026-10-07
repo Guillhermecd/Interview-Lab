@@ -1,9 +1,10 @@
 import type { AuthUser } from '@interview-lab/shared';
 import { NavLink } from 'react-router-dom';
+import { useMoneyVisibility } from '../../hooks/useMoneyVisibility';
 import type { ThemeMode } from '../../hooks/useTheme';
 import { CATALOG_PATH, CHAT_PATH, DASHBOARD_PATH } from '../../routes';
 import { Button } from '../ui/Button';
-import { MoonIcon, RouteIcon, SunIcon } from '../ui/icons';
+import { EyeIcon, EyeOffIcon, MoonIcon, RouteIcon, SunIcon } from '../ui/icons';
 
 interface TopBarProps {
   user: AuthUser;
@@ -18,6 +19,9 @@ const LINKS = [
 ];
 const CATALOG_LINK = { to: CATALOG_PATH, label: 'Cadastro' };
 
+const ICON_BUTTON_CLASS =
+  'flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-[7px] border border-line bg-surface text-text-2 hover:border-line-2 hover:text-text focus-visible:outline-2 focus-visible:outline-accent';
+
 const MAX_INITIALS = 2;
 
 // First letters of the first and last names: "Carla Souza" becomes "CS".
@@ -27,11 +31,13 @@ function initialsOf(name: string): string {
   return picked.map((word) => word?.charAt(0).toUpperCase() ?? '').join('');
 }
 
-// The bar above every screen: brand, navigation, theme and the signed-in user
+// The bar above every screen: brand, navigation, the eye that hides the
+// amounts in reais (D-62), theme and the signed-in user
 // (D-48: name and initials as the server knows them, and the way out).
 export function TopBar({ user, theme, onToggleTheme, onLogout }: TopBarProps) {
   // The server says who may use the registry; the link follows that.
   const links = user.canManageCatalog ? [...LINKS, CATALOG_LINK] : LINKS;
+  const { money, toggleMoney } = useMoneyVisibility();
 
   return (
     <header className="flex h-[52px] shrink-0 items-center gap-5 border-b border-line bg-surface px-5">
@@ -67,9 +73,20 @@ export function TopBar({ user, theme, onToggleTheme, onLogout }: TopBarProps) {
 
       <button
         type="button"
+        onClick={toggleMoney}
+        aria-pressed={money.hidden}
+        aria-label="Ocultar valores em reais"
+        title={money.hidden ? 'Mostrar valores em reais' : 'Ocultar valores em reais'}
+        className={ICON_BUTTON_CLASS}
+      >
+        {money.hidden ? <EyeOffIcon size={15} /> : <EyeIcon size={15} />}
+      </button>
+
+      <button
+        type="button"
         onClick={onToggleTheme}
         aria-label={theme === 'dark' ? 'Usar tema claro' : 'Usar tema escuro'}
-        className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-[7px] border border-line bg-surface text-text-2 hover:border-line-2 hover:text-text focus-visible:outline-2 focus-visible:outline-accent"
+        className={ICON_BUTTON_CLASS}
       >
         {theme === 'dark' ? <SunIcon size={15} /> : <MoonIcon size={15} />}
       </button>

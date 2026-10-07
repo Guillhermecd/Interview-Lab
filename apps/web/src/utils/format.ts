@@ -159,6 +159,34 @@ export function formatCompactCurrency(value: number): string {
   return compactCurrencyFormat.format(value);
 }
 
+// How amounts in reais are written on screen. The hidden form (D-62) keeps the
+// currency and drops the number, whatever the amount.
+export interface MoneyFormat {
+  hidden: boolean;
+  currency: (value: number) => string;
+  compactCurrency: (value: number) => string;
+  // Ticks of a chart axis that measures money.
+  axis: (value: number) => string;
+}
+
+// Non-breaking space, as Intl writes between the currency and the number.
+export const HIDDEN_AMOUNT = 'R$\u00a0••••';
+const HIDDEN_AXIS_TICK = '•••';
+
+export const VISIBLE_MONEY: MoneyFormat = {
+  hidden: false,
+  currency: formatCurrency,
+  compactCurrency: formatCompactCurrency,
+  axis: formatAxisNumber,
+};
+
+export const HIDDEN_MONEY: MoneyFormat = {
+  hidden: true,
+  currency: () => HIDDEN_AMOUNT,
+  compactCurrency: () => HIDDEN_AMOUNT,
+  axis: () => HIDDEN_AXIS_TICK,
+};
+
 export function formatDecimal(value: number): string {
   return oneDecimalFormat.format(value);
 }

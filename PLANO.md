@@ -24,11 +24,12 @@ tabela/gráfico + explicação, em streaming.
 | 09c | Design: dashboard operacional | D-40, D-43, D-48, D-50 a D-55, D-57 | CONCLUÍDA |
 | 09e | Cadastro de materiais e movimentações de estoque | D-56, D-58, D-59 | CONCLUÍDA |
 | 09b | Design: tela do chat em três colunas e painel de schema | D-41, D-60, D-61 | CONCLUÍDA |
+| 09f | Ocultar valores em reais | D-62 | EM REVISÃO |
 | 09d | Design: chat suspenso no dashboard | D-42 | PENDENTE |
 | 10 | Observabilidade, hardening, deploy e README | D-11 | PENDENTE |
 
 A ordem acima é uma proposta (ver D-10). A Fase 09 entrou em 2026-10-05 (D-38); a ordem
-dos seus PRs e a Fase 09e foram definidas na D-49.
+dos seus PRs e a Fase 09e foram definidas na D-49. A Fase 09f entrou em 2026-10-07 (D-62).
 
 ---
 
@@ -171,6 +172,16 @@ atualizados; E2E do fluxo principal.
 - Invalidação do cache de resultados a cada escrita.
 
 **Verificação:** testes de integração provando que a role de escrita não alcança outras tabelas, que quem não é administrador recebe `403`, as regras de validação e o saldo após cada tipo de movimentação; testes de componentes; E2E.
+
+### Fase 09f — Ocultar valores em reais
+**Objetivo:** esconder os valores em reais com um clique, para mostrar a tela a outra pessoa (D-62).
+**Entregas**
+- Botão com ícone de olho na barra superior, ao lado do tema; a escolha fica salva no navegador.
+- Com os valores ocultos, dashboard (indicadores, gráficos, tooltips e eixo do faturamento) e
+  lista de materiais do Cadastro (preço e custo) mostram `R$ ••••`. O chat não muda.
+
+**Verificação:** testes do formato oculto, dos indicadores e do botão (ocultar, mostrar de novo,
+lembrar a escolha, Cadastro); E2E com recarga da página.
 
 ### Fase 09d — Chat suspenso no dashboard
 **Entregas**

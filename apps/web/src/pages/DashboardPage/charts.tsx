@@ -11,14 +11,8 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import {
-  formatAxisNumber,
-  formatCurrency,
-  formatDay,
-  formatDecimal,
-  formatInteger,
-  formatShortDay,
-} from '../../utils/format';
+import { useMoney } from '../../hooks/useMoneyVisibility';
+import { formatDay, formatDecimal, formatInteger, formatShortDay } from '../../utils/format';
 
 const AXIS_COLOR = 'var(--text-3)';
 const REVENUE_HEIGHT = 240;
@@ -45,6 +39,7 @@ interface RevenueTooltipProps {
 }
 
 function RevenueTooltip({ active, payload, mode }: RevenueTooltipProps) {
+  const money = useMoney();
   const point = payload?.[0]?.payload;
   if (active !== true || point === undefined) {
     return null;
@@ -53,9 +48,9 @@ function RevenueTooltip({ active, payload, mode }: RevenueTooltipProps) {
   const previous = mode === 'daily' ? point.previousRevenue : point.previousCumulative;
   return (
     <div className="rounded-md border border-line-2 bg-surface px-2.5 py-2 text-xs shadow-elevated">
-      <p className="font-semibold">{formatCurrency(current)}</p>
+      <p className="font-semibold">{money.currency(current)}</p>
       <p className="text-text-3">{formatDay(point.date)}</p>
-      <p className="mt-1.5 text-text-2">{formatCurrency(previous)}</p>
+      <p className="mt-1.5 text-text-2">{money.currency(previous)}</p>
       <p className="text-text-3">{formatDay(point.previousDate)}</p>
     </div>
   );
@@ -64,6 +59,7 @@ function RevenueTooltip({ active, payload, mode }: RevenueTooltipProps) {
 // Revenue of each day of the period (solid, with a light area) over the same
 // day of the previous period (dashed).
 export function RevenueChart({ series, mode }: RevenueChartProps) {
+  const money = useMoney();
   const currentKey = mode === 'daily' ? 'revenue' : 'cumulative';
   const previousKey = mode === 'daily' ? 'previousRevenue' : 'previousCumulative';
 
@@ -89,7 +85,7 @@ export function RevenueChart({ series, mode }: RevenueChartProps) {
             width={64}
             tickLine={false}
             axisLine={false}
-            tickFormatter={formatAxisNumber}
+            tickFormatter={money.axis}
           />
           <Tooltip content={<RevenueTooltip mode={mode} />} />
           <Line

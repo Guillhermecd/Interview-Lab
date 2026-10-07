@@ -1,10 +1,10 @@
 import type { DashboardKpis, KpiSentiment, KpiTrend } from '@interview-lab/shared';
 import {
-  formatCompactCurrency,
-  formatCurrency,
   formatDecimal,
   formatInteger,
   formatSigned,
+  VISIBLE_MONEY,
+  type MoneyFormat,
 } from '../../utils/format';
 
 // What one indicator card shows. Every number arrives computed by the server;
@@ -32,18 +32,21 @@ const percent = (value: number) => `${formatSigned(value)}%`;
 const plural = (count: number, one: string, many: string) =>
   `${formatInteger(count)} ${count === 1 ? one : many}`;
 
-export function kpiCards(kpis: DashboardKpis): KpiCardContent[] {
+export function kpiCards(
+  kpis: DashboardKpis,
+  money: MoneyFormat = VISIBLE_MONEY,
+): KpiCardContent[] {
   const { revenue, orders, stockValue, coverageDays, belowMinimum, onTimeDelivery } = kpis;
 
   return [
     {
       key: 'revenue',
       label: 'Faturamento do período',
-      value: text(revenue.value, formatCompactCurrency),
+      value: text(revenue.value, money.compactCurrency),
       delta: text(revenue.delta, percent),
       trend: revenue.trend,
       sentiment: revenue.sentiment,
-      sub: `Período anterior: ${text(revenue.previousValue, formatCompactCurrency)}`,
+      sub: `Período anterior: ${text(revenue.previousValue, money.compactCurrency)}`,
       spark: revenue.spark,
       question: 'Por que o faturamento mudou em relação ao período anterior?',
     },
@@ -57,7 +60,7 @@ export function kpiCards(kpis: DashboardKpis): KpiCardContent[] {
       sub:
         orders.averageTicket === null
           ? 'Sem pedidos no período'
-          : `Ticket médio ${formatCurrency(orders.averageTicket)}${
+          : `Ticket médio ${money.currency(orders.averageTicket)}${
               orders.averageTicketDeltaPercent === null
                 ? ''
                 : ` (${percent(orders.averageTicketDeltaPercent)})`
@@ -68,7 +71,7 @@ export function kpiCards(kpis: DashboardKpis): KpiCardContent[] {
     {
       key: 'stockValue',
       label: 'Valor total em estoque',
-      value: text(stockValue.value, formatCompactCurrency),
+      value: text(stockValue.value, money.compactCurrency),
       delta: text(stockValue.delta, percent),
       trend: stockValue.trend,
       sentiment: stockValue.sentiment,

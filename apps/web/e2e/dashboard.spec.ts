@@ -73,3 +73,26 @@ test('keeps the filters in view while the page scrolls', async ({ page }) => {
 
   await expect(page.getByRole('search', { name: 'Filtros do dashboard' })).toBeInViewport();
 });
+
+test('hides the amounts in reais with the eye and keeps them hidden after a reload', async ({
+  page,
+}) => {
+  await useFakeBackend(page);
+  await page.goto('/dashboard');
+  const indicators = page.getByRole('region', { name: 'Indicadores' });
+  await expect(indicators).toContainText('R$ 43,8 mi');
+
+  await page.getByRole('button', { name: 'Ocultar valores em reais' }).click();
+
+  await expect(indicators).toContainText('R$ ••••');
+  await expect(indicators).not.toContainText(/R\$\s\d/);
+  await expect(indicators).toContainText('92,4%');
+
+  await page.reload();
+
+  await expect(page.getByRole('region', { name: 'Indicadores' })).toContainText('R$ ••••');
+  await expect(page.getByRole('button', { name: 'Ocultar valores em reais' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+});

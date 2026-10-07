@@ -71,6 +71,14 @@ export const EyeIcon = createIcon(
   </>,
 );
 
+export const EyeOffIcon = createIcon(
+  <>
+    <path d="M6.4 3.7A6.4 6.4 0 0 1 8 3.5c4.1 0 6.5 4.5 6.5 4.5a11.6 11.6 0 0 1-1.7 2.3M10.9 11.7A6 6 0 0 1 8 12.5C3.9 12.5 1.5 8 1.5 8a11.3 11.3 0 0 1 2.7-3.2" />
+    <path d="M6.6 6.6a2 2 0 0 0 2.8 2.8" />
+    <path d="M2.5 2.5l11 11" />
+  </>,
+);
+
 export const BanIcon = createIcon(
   <>
     <circle cx="8" cy="8" r="6" />

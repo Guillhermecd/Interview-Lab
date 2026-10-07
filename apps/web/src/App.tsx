@@ -5,6 +5,7 @@ import { onUnauthorized } from './api/modules/api';
 import { AuthService } from './api/modules/auth.service';
 import { TopBar } from './components/layout/TopBar';
 import { Spinner } from './components/ui/Spinner';
+import { MoneyVisibilityProvider } from './hooks/useMoneyVisibility';
 import { useTheme } from './hooks/useTheme';
 import { AuthPage } from './pages/AuthPage';
 import { CATALOG_PATH, CHAT_PATH, DASHBOARD_PATH, type ChatLocationState } from './routes';
@@ -80,22 +81,24 @@ export function App() {
   }
   // The key resets every screen state when another account signs in.
   return (
-    <div key={user.id} className="flex h-dvh flex-col">
-      <TopBar
-        user={user}
-        theme={theme}
-        onToggleTheme={toggleTheme}
-        onLogout={() => void logout()}
-      />
-      <Suspense fallback={<Loading />}>
-        <Routes>
-          <Route path={DASHBOARD_PATH} element={<DashboardPage />} />
-          <Route path={CHAT_PATH} element={<ChatRoute />} />
-          {/* Offered only to who the server says may use it; the API checks again. */}
-          {user.canManageCatalog && <Route path={CATALOG_PATH} element={<CatalogPage />} />}
-          <Route path="*" element={<Navigate to={DASHBOARD_PATH} replace />} />
-        </Routes>
-      </Suspense>
-    </div>
+    <MoneyVisibilityProvider>
+      <div key={user.id} className="flex h-dvh flex-col">
+        <TopBar
+          user={user}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          onLogout={() => void logout()}
+        />
+        <Suspense fallback={<Loading />}>
+          <Routes>
+            <Route path={DASHBOARD_PATH} element={<DashboardPage />} />
+            <Route path={CHAT_PATH} element={<ChatRoute />} />
+            {/* Offered only to who the server says may use it; the API checks again. */}
+            {user.canManageCatalog && <Route path={CATALOG_PATH} element={<CatalogPage />} />}
+            <Route path="*" element={<Navigate to={DASHBOARD_PATH} replace />} />
+          </Routes>
+        </Suspense>
+      </div>
+    </MoneyVisibilityProvider>
   );
 }

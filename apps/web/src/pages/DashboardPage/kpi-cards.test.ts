@@ -1,6 +1,7 @@
 import type { DashboardKpis } from '@interview-lab/shared';
 import { describe, expect, it } from 'vitest';
 import { OVERVIEW } from '../../test/dashboard-fixtures';
+import { HIDDEN_AMOUNT, HIDDEN_MONEY } from '../../utils/format';
 import { kpiCards } from './kpi-cards';
 
 function cardOf(kpis: DashboardKpis, key: keyof DashboardKpis) {
@@ -63,6 +64,22 @@ describe('kpiCards', () => {
       sub: 'Sem saídas no período',
     });
     expect(cardOf(kpis, 'orders').sub).toBe('Sem pedidos no período');
+  });
+
+  it('hides the amounts in reais and nothing else when asked to', () => {
+    const cards = kpiCards(OVERVIEW.kpis, HIDDEN_MONEY);
+    const card = (key: keyof DashboardKpis) => cards.find((item) => item.key === key);
+
+    expect(card('revenue')).toMatchObject({
+      value: HIDDEN_AMOUNT,
+      delta: '−1,8%',
+      sub: `Período anterior: ${HIDDEN_AMOUNT}`,
+    });
+    expect(card('stockValue')?.value).toBe(HIDDEN_AMOUNT);
+    expect(card('orders')?.sub).toBe(`Ticket médio ${HIDDEN_AMOUNT} (+0,1%)`);
+    expect(card('orders')?.value).toBe(cardOf(OVERVIEW.kpis, 'orders').value);
+    expect(card('coverageDays')?.value).toBe('36 dias');
+    expect(card('onTimeDelivery')?.value).toBe('92,4%');
   });
 
   it('uses the singular for one', () => {

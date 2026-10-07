@@ -14,6 +14,9 @@ import {
   formatInteger,
   formatRowCount,
   formatShare,
+  HIDDEN_AMOUNT,
+  HIDDEN_MONEY,
+  VISIBLE_MONEY,
   formatTime,
   toChartNumber,
 } from './format';
@@ -113,6 +116,22 @@ describe('display helpers of the dashboard', () => {
     expect(formatCurrency(18_372.4)).toBe('R$ 18.372,40');
     expect(formatCompactCurrency(43_800_000)).toBe('R$ 43,8 mi');
     expect(formatCompactCurrency(902_460)).toBe('R$ 902,46 mil');
+  });
+
+  it('writes money through the visible format exactly as the helpers do', () => {
+    expect(VISIBLE_MONEY.hidden).toBe(false);
+    expect(VISIBLE_MONEY.currency(18_372.4)).toBe(formatCurrency(18_372.4));
+    expect(VISIBLE_MONEY.compactCurrency(43_800_000)).toBe(formatCompactCurrency(43_800_000));
+    expect(VISIBLE_MONEY.axis(45_000_000)).toBe(formatAxisNumber(45_000_000));
+  });
+
+  it('hides any amount behind the same mask, keeping the currency', () => {
+    expect(HIDDEN_MONEY.hidden).toBe(true);
+    expect(HIDDEN_MONEY.currency(18_372.4)).toBe(HIDDEN_AMOUNT);
+    expect(HIDDEN_MONEY.currency(0)).toBe(HIDDEN_AMOUNT);
+    expect(HIDDEN_MONEY.compactCurrency(43_800_000)).toBe(HIDDEN_AMOUNT);
+    expect(HIDDEN_AMOUNT).toMatch(/^R\$\s•+$/);
+    expect(HIDDEN_MONEY.axis(45_000_000)).not.toMatch(/\d/);
   });
 
   it('writes a change with its sign', () => {

@@ -541,3 +541,20 @@ Formato ao decidir: mudar o status para `DECIDIDA`, preencher **Escolha**, **Dat
 - **Opções para o item 2:** manter a coluna | deduzir o tipo do erro pelo texto guardado (quebra se o texto mudar) | não distinguir bloqueada de timeout na lista.
 - **Regra do aviso na lista (`attention`):** vale a última resposta da conversa. `pending_review` quando ela aguarda revisão; `blocked` quando terminou em `QUERY_REJECTED`; `timeout` quando terminou em `QUERY_TIMEOUT`. Outras falhas não geram aviso.
 - **Data:** 2026-10-05
+
+### D-62 — Ocultar valores em reais (Fase 09f)
+- **Contexto:** pedido do Guilherme em 2026-10-07: um ícone de olho que esconde os valores em reais ao clicar. Não estava no `PLANO.md`.
+- **Opções:** (1) alcance: dashboard e Cadastro | só o dashboard | também o chat. (2) posição do botão: barra superior | barra de filtros do dashboard. (3) lembrar a escolha: `localStorage` | só em memória. (4) processo: fase própria | junto com a 09d.
+- **Status:** DECIDIDA
+- **Escolha:**
+  1. **Dashboard e Cadastro.** O chat fica de fora: as colunas de um resultado são genéricas e a tela não sabe qual delas é dinheiro; saber exigiria o backend marcar as colunas (mudança de contrato) ou adivinhar pelo nome.
+  2. **Barra superior**, ao lado do botão de tema: um único controle para todas as telas.
+  3. **`localStorage`** (chave `interview-lab:hide-money`), como o tema e o modo de revisão. O padrão é mostrar.
+  4. **Fase própria, a 09f**, com branch, PR e relatório.
+- **Data:** 2026-10-07
+- **Motivo:** todo valor em reais dessas duas telas passa por duas funções de formatação, então um ponto único resolve; quem esconde por privacidade não deve ver os valores voltarem a cada recarga.
+- **Detalhes de implementação (escolhidos pelo Claude, para revisão):**
+  - O valor oculto aparece como `R$ ••••`, igual para qualquer quantia; percentuais, quantidades e dias continuam visíveis.
+  - O eixo vertical do gráfico de faturamento também é ocultado (`•••`), porque seus rótulos são valores em reais.
+  - O botão é um botão de alternância (`aria-pressed`) com o nome fixo "Ocultar valores em reais".
+- **Limites aceitos:** ocultar é só na tela — a API continua enviando os números ao navegador, então não é controle de acesso. O comprimento das barras, a linha do gráfico e as minilinhas dos indicadores continuam mostrando a proporção entre os valores. O formulário de material mostra preço e custo ao editar.
